@@ -126,6 +126,7 @@ type typing : typ_env -> exp -> qType -> Type =
            $h3:typing g e3 (a ^->!@ a) ->
            typing g (ENRec e1 e2 e3) a
 
+#push-options "--split_queries always"
 val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t (fun _ -> True)
 let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
   match e with
@@ -203,6 +204,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
     let h2 : typing g _ a = h2 in
     let h3 : typing g _ (a ^->!@ a) = h3 in
     fs_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
+#pop-options
 
 private
 let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' (q_io_args o))

@@ -44,8 +44,8 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QBool #ref -> assert (t == x:bool{ref x})
   | QFileDescriptor #ref -> assert (t == x:file_descr{ref x})
   | QString #ref -> assert (t == x:string{ref x})
-  | QArr #t1 #t2 _ _ -> assert (t == ((x:t1 -> y:t2)))
-  | QArrIO #t1 #t2 _ _ -> assert (t == ((x:t1 -> io (y:t2))))
+  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
+  | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ #ref -> assert (t == (x:(t1 & t2){ref x}))
   | QSum #t1 #t2 _ _ #ref -> assert (t == (x:(either t1 t2){ref x}))
   | QUnit -> assert (t == unit)
@@ -165,7 +165,6 @@ unfold
 let ref_type (t:qType) : Type0 =
   ref_type' (get_rel t)
 
-unfold
 let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
   match get_rel t with
   | QUnit -> qUnitR ref

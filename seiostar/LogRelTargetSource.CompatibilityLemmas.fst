@@ -143,7 +143,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊐ EVar 
     end
   end
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 1 --split_queries always"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
   : Lemma
@@ -1033,7 +1033,7 @@ let rec destruct_steps_ecall_arg_all
       (q_io_args op) ⊇ (h, fs_arg, arg))
     (ensures fun (val_arg, (| lt1, lt' |)) ->
       (q_io_args op) ∋ (h, fs_arg, val_arg) /\
-      (exists (args:io_args op). val_arg == as_e_io_args op args) /\
+      val_arg == as_e_io_args op (cast_io_args op fs_arg) /\
       steps arg val_arg h lt1 /\
       steps (ECall op arg) (ECall op val_arg) h lt1 /\
       steps (ECall op val_arg) e' (h++lt1) lt' /\
@@ -1051,6 +1051,7 @@ let rec destruct_steps_ecall_arg_all
     assert (e_beh arg arg h []);
     assert ((q_io_args op) ∋ (h, fs_arg, arg));
     lem_q_io_args op;
+    assert (arg == as_e_io_args op (cast_io_args op fs_arg));
     can_step_ecall_val op arg h;
     false_elim ()
     end
@@ -1081,6 +1082,7 @@ let rec destruct_steps_ecall_arg_all
       lem_value_is_irred (as_e_io_args op args);
       assert (e_beh arg arg h []);
       assert ((q_io_args op) ∋ (h, fs_arg, arg));
+      assert (arg == as_e_io_args op (cast_io_args op fs_arg));
       (arg, (| [], lt |))
       end
     end
@@ -1102,7 +1104,6 @@ let rec destruct_steps_ecall_arg_comp
       squash (steps arg0 arg h0 lt_acc))
     (ensures fun (val_arg, (| lt1, lt' |)) ->
       indexed_irred val_arg (h++lt1) /\
-      (exists (args:io_args op). val_arg == as_e_io_args op args) /\
       steps arg val_arg h lt1 /\
       steps (ECall op arg) (ECall op val_arg) h lt1 /\
       steps (ECall op val_arg) e' (h++lt1) lt' /\
@@ -1166,7 +1167,7 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
     assert (is_closed (ECall op arg'));
     FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #(exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r) () (fun sts1 ->
       trans_history h lt1 lt';
-      let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
+      let (io_res', (e_r, (| lt2, lt3 |))) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
       lem_value_is_irred arg';
       lem_value_is_irred e_r;
       introduce steps e_r e' ((h++lt1)++lt2) lt3 ==> (e_r == e' /\ lt3 == []) with _. begin
@@ -1177,26 +1178,23 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
       assert (lt1 == []);
       assert ((q_io_args op) ∋ (h, fs_arg, arg'));
       let io_arg = cast_io_args op fs_arg in
+      let io_arg' = destruct_e_io_args op arg' in
       assert (arg' == as_e_io_args op io_arg);
-      eliminate exists (args:io_args op) (res:io_res op args).
-          io_pre (h++lt1) op args /\ io_post (h++lt1) op args res /\
-          arg' == as_e_io_args op args /\
-          e_r == as_e_io_res op args res /\
-          lt2 == [op_to_ev op args res]
-      returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r with _. begin
-        assert (args == io_arg);
-        let io_res' : io_res op io_arg = res in
-        let fs_r : fs_val (q_io_res op) = cast_q_io_res op io_arg io_res' in
+      assert (io_arg' == io_arg);
+      let io_res'' : io_res op io_arg = io_res' in
+      assert (io_post h op io_arg io_res'');
+      assert (e_r == as_e_io_res op io_arg io_res'');
+      assert (lt2 == [op_to_ev op io_arg io_res'']);
+      let fs_r : fs_val (q_io_res op) = cast_q_io_res op io_arg io_res'' in
         let io_res = cast_io_res op fs_arg fs_r in
-        assert (io_res' == io_res);
+        assert (io_res'' == io_res);
         assert (io_post h op io_arg io_res);
         assert (e_r == as_e_io_res op io_arg io_res);
         assert (lt2 == [op_to_ev op io_arg io_res]);
         lem_fs_beh_call op fs_arg fs_r h;
         assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op io_arg io_res] fs_r);
         assert (lt == [op_to_ev op io_arg io_res]);
-        assert ((q_io_res op) ∋ (h++lt, fs_r, e'))
-      end))
+        assert ((q_io_res op) ∋ (h++lt, fs_r, e'))))
 #pop-options
 
 (* General compat_ocomp_call_oval - works for all ops *)
@@ -1252,6 +1250,7 @@ let compat_ocomp_string g s : Lemma (fs_ocomp_return_val g qString s ⊒ EString
 
 open FStar.Tactics.V1
 
+#push-options "--split_queries always"
 let compat_ocomp_if #g
   (#t:qType) #preC #preT #preE
   (fs_e1:fs_ocomp g qBool preC) (fs_e2:fs_ocomp g t preT) (fs_e3:fs_ocomp g t preE)
@@ -1297,6 +1296,7 @@ let compat_ocomp_if #g
       end
     end
   end
+#pop-options
 
 let compat_ocomp_file_descr g fd : Lemma (fs_ocomp_return_val g qFileDescr fd ⊒ EFileDescr fd) =
   compat_oval_file_descr g fd;
@@ -1306,6 +1306,7 @@ let compat_ocomp_var g (x:var{Some? (g x)}) : Lemma (fs_ocomp_var g x ⊒ EVar x
   compat_oval_var g x;
   compat_ocomp_return (fs_oval_var g x) (EVar x)
 
+#push-options "--split_queries always"
 let compat_ocomp_app #g (#a #b:qType) #preF #preX (fs_f:fs_ocomp g (a ^->!@ b) preF) (fs_x:fs_ocomp g a preX) (f x:exp)
   : Lemma
     (requires fs_f ⊒ f /\ fs_x ⊒ x)
@@ -1354,6 +1355,7 @@ let compat_ocomp_app #g (#a #b:qType) #preF #preX (fs_f:fs_ocomp g (a ^->!@ b) p
         end
       end
     end
+#pop-options
 
 let compat_ocomp_lambda #g (#t1:qType) (#t2:qType) (#preBody:spec_env (extend t1 g))
   (fs_body:fs_ocomp (extend t1 g) t2 preBody)
@@ -2106,6 +2108,7 @@ let compat_ocomp_zero g : Lemma (fs_ocomp_return_val g qNat 0 ⊒ EZero) =
   compat_oval_zero g;
   compat_ocomp_return (fs_oval_zero g) EZero
 
+#push-options "--split_queries always"
 let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN) (e:exp)
   : Lemma (requires fs_n ⊒ e)
           (ensures (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) ⊒ ESucc e) =
@@ -2156,6 +2159,7 @@ let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN
   assert ((fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) ⊒ ESucc e) by (
     FStar.Tactics.V1.norm [delta_only [`%(⊒); `%superset_ocomp]];
     FStar.Tactics.V1.smt ())
+#pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 private let rec destruct_steps_enrec_nat

@@ -319,6 +319,7 @@ let rec destruct_steps_epair_e1
     end
 #pop-options
 
+#push-options "--split_queries always"
 let rec destruct_steps_epair_e2
   (e1':closed_exp{is_value e1'})
   (e2:closed_exp)
@@ -364,6 +365,7 @@ let rec destruct_steps_epair_e2
       (e2, (| [], lt |))
       end
     end
+#pop-options
 
   (**
     How the steps look like:
@@ -1132,15 +1134,14 @@ let destruct_steps_ecall
   (h:history)
   (lt:local_trace h)
   (st:steps (ECall op val_arg) e' h lt) :
-  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
+  Pure ((io_res op (destruct_e_io_args op val_arg)) * (value * (lt1:local_trace h & local_trace (h++lt1))))
     (requires indexed_irred e' (h++lt))
-    (ensures fun (e_r, (| lt1, lt2 |)) ->
+    (ensures fun (res, (e_r, (| lt1, lt2 |))) ->
+       let args0 = destruct_e_io_args op val_arg in
        steps (ECall op val_arg) e_r h lt1 /\
-       (exists (args:io_args op) (res:io_res op args).
-         io_pre h op args /\ io_post h op args res /\
-         val_arg == as_e_io_args op args /\
-         e_r == as_e_io_res op args res /\
-         lt1 == [op_to_ev op args res]) /\
+       io_pre h op args0 /\ io_post h op args0 res /\
+       e_r == as_e_io_res op args0 res /\
+       lt1 == [op_to_ev op args0 res] /\
        steps e_r e' (h++lt1) lt2 /\
        (lt == (lt1 @ lt2)))
     (decreases st) =
@@ -1155,7 +1156,7 @@ let destruct_steps_ecall
         lem_step_implies_steps (ECall op (as_e_io_args op args)) (as_e_io_res op args res) h (Some (op_to_ev op args res));
         let lt' : local_trace h = [op_to_ev op args res] in
         trans_history h lt' lt23;
-        (f2, (| lt', lt23 |))
+        (res, (f2, (| lt', lt23 |)))
       | SCall hst ->
         lem_value_is_irred val_arg;
         false_elim ()

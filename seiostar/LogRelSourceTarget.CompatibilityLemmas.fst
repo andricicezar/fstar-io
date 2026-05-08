@@ -2304,7 +2304,7 @@ let compat_ocomp_zero g : Lemma (fs_ocomp_return_val g qNat 0 ⊑ EZero) =
   compat_oval_zero g;
   compat_ocomp_return (fs_oval_zero g) EZero
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 1 --split_queries always"
 let helper_compat_ocomp_fmap_succ_steps (h:history) (lt:local_trace h)
   (fs_n':fs_comp qNat) (fs_r:fs_val qNat) (e:closed_exp) :
   Lemma
