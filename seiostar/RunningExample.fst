@@ -717,7 +717,22 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 
-%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+
+%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+
+[@@ (preprocess_with simplify_qType)]
+let main_derivation () : ((qString ^-> qString ^->!@ qUnit) ^->!@ qBool) ⊩ main
+  by (RQ.TypingRelation.Tests.simplify_via_norm ())
+  = pack_turnstile (QLambdaIO (
+      QBind
+        (QAppIO
+          (QApp (QApp (dsnd (wrapper_derivation _)) (QStringLit "./temp"))
+                (QStringLit "overwrite\n"))
+          QAxiom)
+        (QCaseIO QAxiom
+          (QReturn QTrue)
+          (QReturn QFalse))))
 
 let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
