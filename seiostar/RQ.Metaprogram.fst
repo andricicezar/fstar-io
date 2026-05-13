@@ -17,27 +17,45 @@ let print_debug (s:string) : Tac unit =
 
 (** Quotation of types **)
 
-let mk_qunit : term = mk_app (`QTypes.qUnit) []
-let mk_qbool : term = mk_app (`QTypes.qBool) []
-let mk_qfiledescr : term = mk_app (`QTypes.qFileDescr) []
+let mk_qunit (oref:option term) : term =
+  match oref with
+  | None -> mk_app (`QTypes.qUnit) []
+  | Some ref -> mk_app (`QTypes.qUnitR) [(ref, Q_Explicit)]
+let mk_qbool (oref:option term) : term =
+  match oref with
+  | None -> mk_app (`QTypes.qBool) []
+  | Some ref -> mk_app (`QTypes.qBoolR) [(ref, Q_Explicit)]
+let mk_qfiledescr (oref:option term) : term =
+  match oref with
+  | None -> mk_app (`QTypes.qFileDescr) []
+  | Some ref -> mk_app (`QTypes.qFileDescrR) [(ref, Q_Explicit)]
 let mk_qnat : term = mk_app (`QTypes.qNat) []
-let mk_qstring : term = mk_app (`QTypes.qString) []
-let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
+
+let mk_qstring (oref:option term) : term =
+  match oref with
+  | None -> mk_app (`QTypes.qString) []
+  | Some ref -> mk_app (`QTypes.qStringR) [(ref, Q_Explicit)]
 let mk_qresexn (t:term) : term = mk_app (`QTypes.qResexn) [(t, Q_Explicit)]
 let mk_qarr (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qarrio (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qpair (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qsum (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qpair (t1 t2:term) (oref:option term): term =
+  match oref with
+  | None ->  mk_app (`QTypes.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
+  | Some ref -> mk_app (`QTypes.qPairR) [(t1, Q_Explicit); (t2, Q_Explicit); (ref, Q_Explicit)]
+let mk_qsum (t1 t2:term) (oref:option term): term =
+  match oref with
+  | None -> mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
+  | Some ref -> mk_app (`QTypes.qSumR) [(t1, Q_Explicit); (t2, Q_Explicit); (ref, Q_Explicit)]
 
-let rec typ_translation (qt:term) : Tac term =
+let rec typ_translation (qt:term) (oref:option term) : Tac term =
   match inspect_ln qt with
   | Tv_FVar fv -> begin
     match fv_to_string fv with
-    | "Prims.unit" -> mk_qunit
-    | "Prims.bool" -> mk_qbool
-    | "Prims.string" -> mk_qstring
+    | "Prims.unit" -> mk_qunit oref
+    | "Prims.bool" -> mk_qbool oref
+    | "Prims.string" -> mk_qstring oref
     | "Prims.nat" -> mk_qnat
-    | "Trace.file_descr" -> mk_qfiledescr
+    | "Trace.file_descr" -> mk_qfiledescr oref
     | "Prims.int" -> mk_qnat
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
@@ -48,18 +66,18 @@ let rec typ_translation (qt:term) : Tac term =
     | Some fv -> begin
         match fv, app_args with
         | "FStar.Pervasives.Native.tuple2", [(v1, _); (v2, _)] ->
-          mk_qpair (typ_translation v1) (typ_translation v2)
+          mk_qpair (typ_translation v1 None) (typ_translation v2 None) oref
         | "FStar.Pervasives.either", [(v1, _); (v2, _)] ->
-           mk_qsum (typ_translation v1) (typ_translation v2)
+           mk_qsum (typ_translation v1 None) (typ_translation v2 None) oref
         | "Trace.resexn", [(v, _)] ->
-           mk_qresexn (typ_translation v)
+           mk_qresexn (typ_translation v None)
         | fnm, _ -> fail ("Type application not supported: "^ fnm ^ " - " ^ term_to_string qt)
     end
     | _ -> fail ("Type application not supported: " ^ term_to_string qt)
   end
 
   | Tv_Arrow b c ->  begin
-    let tbv = typ_translation (binder_sort b) in
+    let tbv = typ_translation (binder_sort b) None in
     match inspect_comp c with
     | C_Total ret ->
       let maybe_io =
@@ -72,15 +90,15 @@ let rec typ_translation (qt:term) : Tac term =
         | _ -> None
       in
       (match maybe_io with
-       | Some r -> mk_qarrio tbv (typ_translation r)
-       | None -> mk_qarr tbv (typ_translation ret))
+       | Some r -> mk_qarrio tbv (typ_translation r None)
+       | None -> mk_qarr tbv (typ_translation ret None))
     | _ -> fail ("not a total function type")
   end
 
   (** erase refinement **)
-  | Tv_Refine b _ ->
-    let b = inspect_binder b in
-    typ_translation b.sort
+  | Tv_Refine b ref ->
+    let bv = inspect_binder b in
+    typ_translation bv.sort (Some (pack_ln (Tv_Abs b ref)))
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
@@ -122,6 +140,7 @@ let rec mk_nat_literal (n:nat) : Tot term (decreases n) =
   if n = 0 then mk_qzero
   else mk_qsucc (mk_nat_literal (n - 1))
 
+let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
 let mk_qeq_string (v1 v2 : term) : term =
   mk_app (`QStringEq) [(v1, Q_Explicit); (v2, Q_Explicit)]
 
@@ -129,6 +148,8 @@ let mk_qmkpair (t1:term) (t2:term) : term =
   mk_app (`QMkpair) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
 let mk_qsnd (t:term) : term = mk_app (`QSnd) [(t, Q_Explicit)]
+
+let mk_qref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit)]
 
 let mk_qinl (t:term) : term = mk_app (`QInl) [(t, Q_Explicit)]
 let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
@@ -408,7 +429,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
     | Some nm -> [nm]
     | None -> []
   in
-  let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
+  let desired_qtyp = mk_ptyj (typ_translation qtyp None) qprog in
   let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
   let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation g qderivation desired_qtyp unfold_names
