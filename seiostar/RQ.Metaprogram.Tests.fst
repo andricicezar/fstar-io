@@ -12,6 +12,12 @@ open ExamplesIO
 open ExamplesRefs
 open ExamplesIORefinements
 
+%splice_t[tgt_refbool] (generate_derivation "tgt_refbool" (`refbool))
+%splice_t[tgt_io_negate_ref] (generate_derivation "tgt_io_negate_ref" (`io_negate_ref))
+%splice_t[tgt_if_seq] (generate_derivation "tgt_if_seq" (`if_seq))
+%splice_t[tgt_seq_basic] (generate_derivation "tgt_seq_basic" (`seq_basic))
+%splice_t[tgt_always_false_ho] (generate_derivation "tgt_always_false_ho" (`always_false_ho))
+
 %splice_t[tgt_io_pair_ref] (generate_derivation "tgt_io_pair_ref" (`io_pair_ref))
 %splice_t[tgt_io_inl_ref] (generate_derivation "tgt_io_inl_ref" (`io_inl_ref))
 

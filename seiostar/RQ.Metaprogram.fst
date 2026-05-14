@@ -183,7 +183,7 @@ let mk_qtrue : term = mk_app (`QTrue) []
 let mk_qfalse : term = mk_app (`QFalse) []
 
 let mk_qif (b:term) (t1:term) (t2:term) : term =
-  mk_app (`QIf) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
+  mk_app (`QIf) [(mk_qref b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 
 let mk_qzero : term = mk_app (`QZero) []
 let mk_qsucc (n:term) : term = mk_app (`QSucc) [(n, Q_Explicit)]
@@ -556,7 +556,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
     | None -> []
   in
   let desired_qtyp = mk_ptyj (typ_translation qtyp None) qprog in
-  let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
+  let open_qderivation = mk_qref (create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog) in
   let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation g qderivation desired_qtyp unfold_names
 
