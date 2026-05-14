@@ -12,11 +12,24 @@ open ExamplesIO
 open ExamplesRefs
 open ExamplesIORefinements
 
+%splice_t[tgt_simple_erase_ref] (generate_derivation "tgt_simple_erase_ref" (`simple_erase_ref))
+%splice_t[tgt_simple_reref_id] (generate_derivation "tgt_simple_reref_id" (`simple_reref_id))
+%splice_t[tgt_simple_ref_bind] (generate_derivation "tgt_simple_ref_bind" (`simple_ref_bind))
+%splice_t[tgt_io_ret_ref_true] (generate_derivation "tgt_io_ret_ref_true" (`io_ret_ref_true))
+%splice_t[tgt_io_ret_ref_false] (generate_derivation "tgt_io_ret_ref_false" (`io_ret_ref_false))
+%splice_t[tgt_io_if_both_false] (generate_derivation "tgt_io_if_both_false" (`io_if_both_false))
+%splice_t[tgt_io_bind_ret_ref] (generate_derivation "tgt_io_bind_ret_ref" (`io_bind_ret_ref))
+%splice_t[tgt_io_call_ret_ref] (generate_derivation "tgt_io_call_ret_ref" (`io_call_ret_ref))
+%splice_t[tgt_io_two_calls_ref] (generate_derivation "tgt_io_two_calls_ref" (`io_two_calls_ref))
+%splice_t[tgt_io_case_ref] (generate_derivation "tgt_io_case_ref" (`io_case_ref))
+%splice_t[tgt_io_ifbang_ref] (generate_derivation "tgt_io_ifbang_ref" (`io_ifbang_ref))
+%splice_t[tgt_io_matchbang_ref] (generate_derivation "tgt_io_matchbang_ref" (`io_matchbang_ref))
+%splice_t[tgt_io_ghost_seq] (generate_derivation "tgt_io_ghost_seq" (`io_ghost_seq))
+
 %splice_t[tgt_if_x] (generate_derivation "tgt_if_x" (`if_x))
 %splice_t[tgt_seq_qref] (generate_derivation "tgt_seq_qref" (`seq_qref))
 %splice_t[tgt_seq_p_implies_q] (generate_derivation "tgt_seq_p_implies_q" (`seq_p_implies_q))
 %splice_t[tgt_context] (generate_derivation "tgt_context" (`context))
-%splice_t[tgt_io_ghost_seq] (generate_derivation "tgt_io_ghost_seq" (`io_ghost_seq))
 %splice_t[tgt_io_apply_callback] (generate_derivation "tgt_io_apply_callback" (`io_apply_callback))
 
 %splice_t[tgt_falsepre] (generate_derivation "tgt_falsepre" (`falsepre))

@@ -183,7 +183,7 @@ let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (mk_qref ar
 let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
 let mk_qappcomp (f arg : term) : term = mk_app (`QAppIO) [(f, Q_Explicit); (arg, Q_Explicit)]
 let mk_qcall (op:term) (args:term) : term = mk_app (`QCall) [(op, Q_Explicit); (args, Q_Explicit)]
-let mk_qreturn (t:term) : term = mk_app (`QReturn) [(t, Q_Explicit)]
+let mk_qreturn (t:term) : term = mk_app (`QReturn) [(mk_qref t, Q_Explicit)]
 let mk_qbind (e:term) (f:term) : term = mk_app (`QBind) [(e, Q_Explicit); (f, Q_Explicit)]
 let mk_qifcomp (b:term) (t1:term) (t2:term) : term =
   mk_app (`QIfIO) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
@@ -435,7 +435,7 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
         | Tv_Arrow b _ ->
           let bv = inspect_binder b in
           bv.sort
-        | _ -> fail ("Expected an arrow type for implicit, got: " ^ term_to_string typ)
+        | _ -> go rest qd
       in
       let true_fun = mk_app (`trivial_ref0) [(dom, Q_Implicit)] in
       let sub = [FStar.Stubs.Syntax.Syntax.NT nv true_fun] in
