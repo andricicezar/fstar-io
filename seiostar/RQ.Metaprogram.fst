@@ -121,6 +121,41 @@ let rec typ_translation (qt:term) (oref:option term) : Tac term =
 
   | _ -> fail ("not implemented in types: " ^ tag_of qt)
 
+(** Try to extract the qTypes for the [a] and [b] branches of [either a b]
+    (or [resexn a], which unfolds to [either a unit]) from [ty]. *)
+let either_branches_of_ty (ty:typ) : Tac (option (term & term)) =
+  let (h, args) = collect_app ty in
+  match get_fv h, args with
+  | Some "FStar.Pervasives.either", [(a, _); (b, _)] ->
+    Some (typ_translation a None, typ_translation b None)
+  | Some "Trace.resexn", [(a, _)] ->
+    Some (typ_translation a None, typ_translation (`unit) None)
+  | _ -> None
+
+(** Try to extract the qTypes for the [a] and [b] branches of [either a b]
+    from [fstar_ty] (the expected F* type of [qfs]); if [fstar_ty] is [None],
+    fall back to type-checking [qfs] in [g]. *)
+let extract_either_branches (g:env) (fstar_ty:option typ) (qfs:term) : Tac (option (term & term)) =
+  let ty_opt =
+    match fstar_ty with
+    | Some t -> Some t
+    | None -> None
+    // (match tc_term g qfs with
+    //            | Some (_, (_, t)), _ -> Some t
+    //            | _ -> None)
+  in
+  match ty_opt with
+  | None -> None
+  | Some ty -> either_branches_of_ty ty
+
+(** Strip a leading [IOStar.io] application from [ty], returning the payload
+    type if matched. *)
+let strip_io (ty:typ) : Tac (option typ) =
+  let (h, args) = collect_app ty in
+  match get_fv h, args with
+  | Some "IOStar.io", [(a, _)] -> Some a
+  | _ -> None
+
 (** Quotation of expressions **)
 unfold let ptyping (ty:qType) (t:fs_val ty) =
   g:typ_env -> packed_turnstile_g g ty t
@@ -169,6 +204,20 @@ let mk_qref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit)]
 
 let mk_qinl (t:term) : term = mk_app (`QInl) [(t, Q_Explicit)]
 let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
+
+(** Construct [QInl #_ #a #b #_ #_ t] / [QInr ...] with [a] (the Inl branch
+    qType) and [b] (the Inr branch qType) provided explicitly. This avoids
+    leaving the "other-branch" qType implicit as an uninferable uvar that
+    F*'s unifier cannot solve through [get_rel ?b] when the constructor's
+    result is compared against a known sum type. *)
+let mk_qinl_explicit (a b inner:term) : term =
+  let unk = pack_ln Tv_Unknown in
+  mk_app (`QInl) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
+                  (unk, Q_Implicit); (unk, Q_Implicit); (inner, Q_Explicit)]
+let mk_qinr_explicit (a b inner:term) : term =
+  let unk = pack_ln Tv_Unknown in
+  mk_app (`QInr) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
+                  (unk, Q_Implicit); (unk, Q_Implicit); (inner, Q_Explicit)]
 let mk_qcase (t:term) (x1:term) (x2:term) : term =
   mk_app (`QCase) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
@@ -279,13 +328,25 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     | Some "FStar.Pervasives.Native.snd", [v1] ->
       mk_qsnd (create_derivation g dbmap prior_derivs fuel false None v1)
     | Some "FStar.Pervasives.Inl", [v1] ->
-      mk_qinl (create_derivation g dbmap prior_derivs fuel false None v1)
+      let inner = create_derivation g dbmap prior_derivs fuel false None v1 in
+      (match extract_either_branches g fstar_ty qfs with
+       | Some (qa, qb) -> mk_qinl_explicit qa qb inner
+       | None -> mk_qinl inner)
     | Some "FStar.Pervasives.Inr", [v1] ->
-      mk_qinr (create_derivation g dbmap prior_derivs fuel false None v1)
+      let inner = create_derivation g dbmap prior_derivs fuel false None v1 in
+      (match extract_either_branches g fstar_ty qfs with
+       | Some (qa, qb) -> mk_qinr_explicit qa qb inner
+       | None -> mk_qinr inner)
     | Some "IOStar.io_return", [v] ->
-      mk_qreturn (create_derivation g dbmap prior_derivs fuel false None v)
+      let v_ty = match fstar_ty with
+        | Some t -> strip_io t
+        | None -> None in
+      mk_qreturn (create_derivation g dbmap prior_derivs fuel false v_ty v)
     | Some "IOStar.return", [v] ->
-      mk_qreturn (create_derivation g dbmap prior_derivs fuel false None v)
+      let v_ty = match fstar_ty with
+        | Some t -> strip_io t
+        | None -> None in
+      mk_qreturn (create_derivation g dbmap prior_derivs fuel false v_ty v)
     | Some "IOStar.io_call", [op; v] ->
       mk_qcall op (create_derivation g dbmap prior_derivs fuel false None v)
     | Some "IOStar.op_let_Bang_At", [m; k]
@@ -293,7 +354,9 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let qm = create_derivation g dbmap prior_derivs fuel true None m in
       match inspect_ln k with
       | Tv_Abs bin body ->
-        let qk = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel true None body in
+        (** Continuation [k : a -> io b] has the same outer io result type as the
+            whole [io_bind], so propagate [fstar_ty] into the body. *)
+        let qk = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel true fstar_ty body in
         mk_qbind qm qk
       | _ -> fail "IOStar.io_bind continuation is not a lambda"
     end
@@ -309,7 +372,19 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       | Tv_Abs bin body ->
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
         let qk_body = create_derivation g dbmap' prior_derivs fuel true None body in
-        let qinr_branch = mk_qreturn (mk_qinr mk_qaxiom) in
+        let qinr_node =
+          let branches =
+            match fstar_ty with
+            | Some t -> (match strip_io t with
+                         | Some payload -> either_branches_of_ty payload
+                         | None -> None)
+            | None -> None
+          in
+          match branches with
+          | Some (qa, qb) -> mk_qinr_explicit qa qb mk_qaxiom
+          | None -> mk_qinr mk_qaxiom
+        in
+        let qinr_branch = mk_app (`QReturn) [(qinr_node, Q_Explicit)] in
         mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
       | _ -> fail "IOStar.op_let_Bang_At_Bang continuation is not a lambda"
     end
@@ -430,18 +505,21 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
     match l with
     | [] -> qd
     | (nv, typ) :: rest ->
-      let dom =
-        match inspect_ln typ with
-        | Tv_Arrow b _ ->
-          let bv = inspect_binder b in
-          bv.sort
-        | _ -> go rest qd
-      in
-      let true_fun = mk_app (`trivial_ref0) [(dom, Q_Implicit)] in
-      let sub = [FStar.Stubs.Syntax.Syntax.NT nv true_fun] in
-      let qd' = subst_term sub qd in
-      let rest' = map (fun (nv', t) -> (nv', subst_term sub t)) rest in
-      go rest' qd'
+      match inspect_ln typ with
+      | Tv_Arrow b _ ->
+        let bv = inspect_binder b in
+        let dom = bv.sort in
+        let true_fun = mk_app (`trivial_ref0) [(dom, Q_Implicit)] in
+        let sub = [FStar.Stubs.Syntax.Syntax.NT nv true_fun] in
+        let qd' = subst_term sub qd in
+        let rest' = map (fun (nv', t) -> (nv', subst_term sub t)) rest in
+        go rest' qd'
+      | _ ->
+        (** Leftover implicit is not [_ -> Type0] (typically a stray [qType]
+            from a failed QInl/QInr inversion through [change_refinement]).
+            Skip it so the substitution machinery does not get a derivation
+            term piped into [trivial_ref0]'s [#a:Type0] slot. *)
+        go rest qd
   in
   go l qderivation
 
@@ -451,7 +529,8 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   let qderivation = fill_trivial_refinements l qderivation in
 
-  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  // print_debug ("DEBUG: desired_qtyp = " ^ term_to_string desired_qtyp);
+  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let qderivation = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
  // print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
   let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; iota] desired_qtyp in

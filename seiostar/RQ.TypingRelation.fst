@@ -254,7 +254,7 @@ let pack_turnstile
   (t:typing empty x')
   : Pure (a ⊩ x) (requires (x' == (fun _ -> x))) (ensures (fun _ -> True))
    =
-  pack_turnstile_g t
+  pack_turnstile_g #empty #a #x #pre #x' t
 
 let (⊫) (a:qType) (x: fs_val a) =
   t:(a ⊩ x) & squash (t._1 empty_eval)
