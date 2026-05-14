@@ -3,11 +3,20 @@ module RQ.TypingRelation
 open IOStar
 include QTypes.OpenValComp
 
+let spec_env_unit_ref (#g:typ_env) (ref:unit -> Type0) : spec_env g =
+  fun _ -> ref ()
+
+unfold
+let fs_oval_unit_ref (g:typ_env) (ref:unit -> Type0)
+  : fs_oval g (qUnitR ref) (spec_env_unit_ref ref)
+  = fun _ -> ()
+
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> Type =
-| Qtt         : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
+| Qtt         : #g : typ_env -> #ref:(unit -> Type0) -> typing g (fs_oval_unit_ref g ref)
+// | Qtt        : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
 | QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g #qFileDescr fd)
 
 | QAxiom      : #g : typ_env ->

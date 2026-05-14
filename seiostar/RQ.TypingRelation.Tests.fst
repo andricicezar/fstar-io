@@ -200,7 +200,7 @@ let test_pair_of_functions2 ()
 let test_fst_pair ()
   : (qBool) ⊩ fst_pair
   by (simplify_via_norm ())
-  = pack_turnstile (QFst (QMkpair QTrue Qtt))
+  = pack_turnstile (QFst (QMkpair QTrue (Qtt #_ #(fun _ -> True))))
 
 let test_wrap_fst ()
   : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst
@@ -602,7 +602,7 @@ let test_just_true ()
 let test_moving_ref ()
   : (qBoolR (fun _ -> some_ref) ^-> qUnitR (fun _ -> some_ref)) ⊩ moving_ref
   by (simplify_via_norm ())
-  = pack_turnstile (QLambda (QRef Qtt))
+  = pack_turnstile (QLambda Qtt)
 
 [@@ (preprocess_with simplify_qType)]
 let test_always_false ()
@@ -637,7 +637,7 @@ let test_seq_basic ()
 let test_seq_qref ()
   : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = pack_turnstile (QLambda (qLet (QApp QAxiom Qtt) (QRef Qtt)))
+  = pack_turnstile (QLambda (qLet (QApp QAxiom Qtt) Qtt))
 
 let test_seq_p_implies_q ()
   : ((qBoolR p_ref ^-> qUnitR (fun _ -> q_ref)) ^-> qBoolR p_ref ^-> qBoolR (fun _ -> q_ref))
@@ -790,7 +790,7 @@ let test_ior_io_bind_ret_ref ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambdaIO (
     QBind
-      (QReturn Qtt)
+      (QReturn (Qtt #_ #(fun _ -> True)))
       (QReturn (QRef QTrue))))
 
 (** Example 11: IO call then return refined *)
@@ -872,7 +872,7 @@ let test_ior_io_ghost_seq ()
   : ((qUnit ^-> qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ^->!@ qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ⊩ io_ghost_seq
   by (simplify_via_norm ())
   = pack_turnstile (QLambdaIO (
-    QReturn (qLet (QApp QAxiom Qtt) (QRef Qtt))))
+    QReturn (qLet (QApp QAxiom Qtt) Qtt)))
 
 (** Example 20: Apply refined callback in IO *)
 let test_ior_io_apply_callback ()
