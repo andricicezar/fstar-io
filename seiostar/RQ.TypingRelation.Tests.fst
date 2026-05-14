@@ -6,7 +6,7 @@ open RQ.TypingRelation
 open QTypes.HelperTactics
 
 let simplify_via_norm () : Tac unit =
-  let _ = repeat forall_intro in
+  ignore (repeat forall_intro);
   or_else trivial trefl
 
 let simplify_d () : Tac unit = norm [delta_only qType_defs_list; iota]
@@ -200,7 +200,7 @@ let test_pair_of_functions2 ()
 let test_fst_pair ()
   : (qBool) ⊩ fst_pair
   by (simplify_via_norm ())
-  = pack_turnstile (QFst (QMkpair QTrue (Qtt #_ #(fun _ -> True))))
+  = pack_turnstile (QFst (QMkpair QTrue Qtt))
 
 let test_wrap_fst ()
   : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst
@@ -235,6 +235,7 @@ let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g
 let three_lets : bool -> unit =
   fun x -> let p = (x, x) in let _y = x in let _z = fst p in ()
 
+[@@ (preprocess_with simplify_qType)]
  let test_three_lets ()
    : (qBool ^-> qUnit) ⊩ three_lets
    by (simplify_via_norm ())
@@ -419,6 +420,7 @@ let test_apply_io_bind_read_if_write ()
            (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
            (QReturn (QInr QAxiom))))))
 
+[@@ (preprocess_with simplify_qType)]
 let test_sendError400 ()
   : (qFileDescr ^->!@ qUnit) ⊩ sendError400
   by (simplify_via_norm ())
@@ -579,7 +581,7 @@ open ExamplesRefs
 let test_refbool ()
   : qBoolR (fun t -> t == true) ⊩ refbool
   by (simplify_via_norm ())
-  = pack_turnstile (QRef QTrue)
+  = pack_turnstile (QTrue)
 
 (* The refinement inferred for [QRef] need not be the one from [refbool]'s
    original F* type. The same derivation also checks at a different, weaker
@@ -587,7 +589,7 @@ let test_refbool ()
 let test_refbool_infers_weaker_refinement ()
   : qBoolR (fun t -> t == true \/ t == false) ⊩ refbool
   by (simplify_via_norm ())
-  = pack_turnstile (QRef QTrue)
+  = pack_turnstile (QTrue)
 
 let test_falsepre ()
   : (qBoolR (fun _ -> False) ^-> qBool) ⊩ falsepre
@@ -597,7 +599,7 @@ let test_falsepre ()
 let test_just_true ()
   : (qBool ^-> qBoolR (fun x -> x == true)) ⊩ just_true
   by (simplify_via_norm ())
-  = pack_turnstile (QLambda (QRef QTrue))
+  = pack_turnstile (QLambda (QTrue))
 
 let test_moving_ref ()
   : (qBoolR (fun _ -> some_ref) ^-> qUnitR (fun _ -> some_ref)) ⊩ moving_ref
@@ -761,13 +763,13 @@ let test_ior_simple_ref_bind ()
 let test_ior_io_ret_ref_true ()
   : (qUnit ^->!@ qBoolR (fun x -> x == true)) ⊩ io_ret_ref_true
   by (simplify_via_norm ())
-  = pack_turnstile (QLambdaIO (QReturn (QRef QTrue)))
+  = pack_turnstile (QLambdaIO (QReturn (QTrue)))
 
 (** Example 7: Return refined false constant *)
 let test_ior_io_ret_ref_false ()
   : (qUnit ^->!@ qBoolR (fun x -> x == false)) ⊩ io_ret_ref_false
   by (simplify_via_norm ())
-  = pack_turnstile (QLambdaIO (QReturn (QRef QFalse)))
+  = pack_turnstile (QLambdaIO (QReturn (QFalse)))
 
 (** Example 8: Negate refined input in IO *)
 
@@ -790,8 +792,8 @@ let test_ior_io_bind_ret_ref ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambdaIO (
     QBind
-      (QReturn (Qtt #_ #(fun _ -> True)))
-      (QReturn (QRef QTrue))))
+      (QReturn Qtt)
+      (QReturn (QTrue))))
 
 (** Example 11: IO call then return refined *)
 let test_ior_io_call_ret_ref ()
@@ -800,7 +802,7 @@ let test_ior_io_call_ret_ref ()
   = pack_turnstile (QLambdaIO (
       QBind
         (QCall OOpen (QStringLit "./file"))
-        (QReturn (QRef QTrue))))
+        (QReturn (QTrue))))
 
 (** Example 12: Two IO calls then return refined *)
 let test_ior_io_two_calls_ref ()
@@ -812,7 +814,7 @@ let test_ior_io_two_calls_ref ()
         (QCall OOpen (QStringLit "./a"))
         (QBind
           (QCall OOpen (QStringLit "./b"))
-          (QReturn (QRef QTrue)))))
+          (QReturn (QTrue)))))
 
 (** Example 13: Inject Inl with refined input in IO *)
 let test_ior_io_inl_ref ()
@@ -879,7 +881,7 @@ let test_ior_io_apply_callback ()
   : ((qBoolR (fun x -> x == true) ^-> qBool) ^->!@ qBool) ⊩ io_apply_callback
   by (simplify_via_norm ())
   = pack_turnstile (
-    QLambdaIO (QReturn (QApp QAxiom (QRef QTrue))))
+    QLambdaIO (QReturn (QApp QAxiom (QTrue))))
 
 (** Example 21: Validate with refined callback in IO *)
 
@@ -997,7 +999,7 @@ let d_test_ior_io_apply_callback () : _ ⊫ _
 let test_qref_false_pre_on_bool ()
   : qBool ⊩ true
   by (simplify_via_norm ())
-  = pack_turnstile (QRef (QRef QTrue #(fun _ -> False)) #(fun _ -> True))
+  = pack_turnstile (QRef (QTrue #_ #(fun _ -> False)) #(fun _ -> True))
 
 let test_qref_false_pre_on_bool_unsat ()
   : Lemma (~((dfst (test_qref_false_pre_on_bool ())) empty_eval))

@@ -3,21 +3,64 @@ module RQ.TypingRelation
 open IOStar
 include QTypes.OpenValComp
 
-let spec_env_unit_ref (#g:typ_env) (ref:unit -> Type0) : spec_env g =
-  fun _ -> ref ()
+(** Default tactic to fill in a trivial refinement [fun _ -> True] when the
+    surrounding context leaves the refinement implicit unconstrained. This is
+    run only if regular unification cannot determine the implicit. *)
+let default_refinement () : FStar.Tactics.V1.Tac unit =
+  FStar.Tactics.V1.exact (`(fun _ -> True))
+
+(** Helpers that bake a refinement directly into the qType of a pair/sum
+    value (mirroring how [fs_oval_unit_ref] works for [qUnitR ref]).  Going
+    through [fs_oval_ref] would force the qType to be [change_refinement
+    (a ^* b) ref], whose normal form contains a [pack ∘ get_rel] round-trip
+    that prevents F*'s unifier from solving the structural metavariables
+    [a] and [b] from the outer expected type.  These helpers return at the
+    nicer qType [qPairR a b ref] / [qSumR a b ref], which has the same
+    QPair/QSum structural shape as [a ^* b] / [a ^+ b] but with the chosen
+    refinement plugged in. *)
+unfold
+let fs_oval_pair_ref
+  (#g:typ_env)
+  (#a #b:qType)
+  (#preX #preY:spec_env g)
+  (x: fs_oval g a preX)
+  (y: fs_oval g b preY)
+  (ref: ref_type (a ^* b) -> Type0)
+  : fs_oval g (qPairR a b ref) (spec_env_ref (fs_oval_pair x y) ref)
+  = fun fsG -> (x fsG, y fsG)
 
 unfold
-let fs_oval_unit_ref (g:typ_env) (ref:unit -> Type0)
-  : fs_oval g (qUnitR ref) (spec_env_unit_ref ref)
-  = fun _ -> ()
+let fs_oval_inl_ref
+  (#g:typ_env)
+  (#a #b:qType)
+  (#preP:spec_env g)
+  (p: fs_oval g a preP)
+  (ref: ref_type (a ^+ b) -> Type0)
+  : fs_oval g (qSumR a b ref) (spec_env_ref (fs_oval_fmap p Inl) ref)
+  = fun fsG -> Inl (p fsG)
+
+unfold
+let fs_oval_inr_ref
+  (#g:typ_env)
+  (#a #b:qType)
+  (#preP:spec_env g)
+  (p: fs_oval g b preP)
+  (ref: ref_type (a ^+ b) -> Type0)
+  : fs_oval g (qSumR a b ref) (spec_env_ref (fs_oval_fmap p Inr) ref)
+  = fun fsG -> Inr (p fsG)
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> Type =
-| Qtt         : #g : typ_env -> #ref:(unit -> Type0) -> typing g (fs_oval_unit_ref g ref)
+| Qtt         : #g : typ_env ->
+                #[default_refinement ()] ref:(unit -> Type0) ->
+                typing g (fs_oval_ref (fs_oval_return g #qUnit ()) ref)
 // | Qtt        : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
-| QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g #qFileDescr fd)
+| QFd         : #g : typ_env ->
+                fd:file_descr ->
+                #[default_refinement ()] ref:(file_descr -> Type0) ->
+                typing g (fs_oval_ref (fs_oval_return g #qFileDescr fd) ref)
 
 | QAxiom      : #g : typ_env ->
                 #a : qType ->
@@ -77,9 +120,16 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g f ->
                 typing g (fs_oval_nrec n base f)
 
-| QTrue       : #g : typ_env -> typing g (fs_oval_return g #qBool true)
-| QFalse      : #g : typ_env -> typing g (fs_oval_return g #qBool false)
-| QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g #qString s)
+| QTrue       : #g : typ_env ->
+                #[default_refinement ()] ref:(bool -> Type0) ->
+                typing g (fs_oval_ref (fs_oval_return g #qBool true) ref)
+| QFalse      : #g : typ_env ->
+                #[default_refinement ()] ref:(bool -> Type0) ->
+                typing g (fs_oval_ref (fs_oval_return g #qBool false) ref)
+| QStringLit  : #g : typ_env ->
+                s:string ->
+                #[default_refinement ()] ref:(string -> Type0) ->
+                typing g (fs_oval_ref (fs_oval_return g #qString s) ref)
 | QStringEq   : #g : typ_env ->
                 #preS1 : spec_env g ->
                 #s1 : fs_oval g qString preS1 ->
@@ -110,7 +160,8 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
               #y : fs_oval g b preY ->
               typing g x ->
               typing g y ->
-              typing g (fs_oval_pair x y)
+              #[default_refinement ()] ref:(ref_type (a ^* b) -> Type0) ->
+              typing g (fs_oval_pair_ref x y ref)
 | QFst      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
@@ -131,14 +182,16 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
               #preP : spec_env g ->
               #p : fs_oval g a preP ->
               typing g p ->
-              typing #(a ^+ b) g (fs_oval_fmap p Inl)
+              #[default_refinement ()] ref:(ref_type (a ^+ b) -> Type0) ->
+              typing g (fs_oval_inl_ref #_ #a #b p ref)
 | QInr      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #preP : spec_env g ->
               #p : fs_oval g b preP ->
               typing g p ->
-              typing #(a ^+ b) g (fs_oval_fmap p Inr)
+              #[default_refinement ()] ref:(ref_type (a ^+ b) -> Type0) ->
+              typing g (fs_oval_inr_ref #_ #a #b p ref)
 | QCase     : #g : typ_env ->
               #a : qType ->
               #b : qType ->
