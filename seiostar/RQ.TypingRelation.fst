@@ -140,8 +140,9 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g (fs_oval_eq_string s1 s2)
 | QIf         : #g : typ_env ->
                 #a : qType ->
+                #refC : (bool -> Type0) ->
                 #preC : spec_env g ->
-                #c : fs_oval g qBool preC ->
+                #c : fs_oval g (qBoolR refC) preC ->
                 typing g c ->
                 #preT : spec_env g ->
                 #t : fs_oval g a preT ->
@@ -196,8 +197,9 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
               #a : qType ->
               #b : qType ->
               #c : qType ->
+              #refS : (ref_type (a ^+ b) -> Type0) ->
               #preCond : spec_env g ->
-              #cond : fs_oval g (a ^+ b) preCond->
+              #cond : fs_oval g (qSumR a b refS) preCond->
               typing g cond ->
               #preInlc : spec_env (extend a g) ->
               #inlc : fs_oval (extend a g) c preInlc ->
@@ -254,8 +256,9 @@ and typing_io : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_ocomp g a preG -
                 typing_io g (fs_ocomp_app_oval_oval f x)
 | QIfIO     : #g : typ_env ->
               #a : qType ->
+              #refC : (bool -> Type0) ->
               #preC : spec_env g ->
-              #c : fs_oval g qBool preC ->
+              #c : fs_oval g (qBoolR refC) preC ->
               typing g c ->
               #preT : spec_env g ->
               #t : fs_ocomp g a preT ->
@@ -268,8 +271,9 @@ and typing_io : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_ocomp g a preG -
               #a : qType ->
               #b : qType ->
               #c : qType ->
+              #refS : (ref_type (a ^+ b) -> Type0) ->
               #preCond : spec_env g ->
-              #cond : fs_oval g (a ^+ b) preCond ->
+              #cond : fs_oval g (qSumR a b refS) preCond ->
               typing g cond ->
               #preInlc : spec_env (extend a g) ->
               #inlc : fs_ocomp (extend a g) c preInlc->
