@@ -49,18 +49,32 @@ let fs_oval_inr_ref
   : fs_oval g (qSumR a b ref) (spec_env_ref (fs_oval_fmap p Inr) ref)
   = fun fsG -> Inr (p fsG)
 
+irreducible
+let spec_env_return_ref (#g:typ_env) (#a:qType) (x:fs_val a) (ref:ref_type a -> Type0) : spec_env g =
+  fun _ -> ref x
+
+let fs_oval_return_ref
+  (g:typ_env)
+  (#t:qType)
+  (x:fs_val t)
+  (ref:ref_type t -> Type0)
+  : Tot (fs_oval g (change_refinement t ref) (spec_env_return_ref x ref))
+  =
+    admit ();
+    fs_oval_ref (fs_oval_return g #t x) ref
+
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> Type =
 | Qtt         : #g : typ_env ->
-                #[default_refinement ()] ref:(unit -> Type0) ->
-                typing g (fs_oval_ref (fs_oval_return g #qUnit ()) ref)
+                #[default_refinement ()] ref:(ref_type qUnit -> Type0) ->
+                typing #(qUnitR ref) g #(spec_env_return_ref () ref) (fs_oval_return_ref g #qUnit () ref)
 // | Qtt        : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
 | QFd         : #g : typ_env ->
                 fd:file_descr ->
-                #[default_refinement ()] ref:(file_descr -> Type0) ->
-                typing g (fs_oval_ref (fs_oval_return g #qFileDescr fd) ref)
+                #[default_refinement ()] ref:(ref_type qFileDescr -> Type0) ->
+                typing g (fs_oval_return_ref g #qFileDescr fd ref)
 
 | QAxiom      : #g : typ_env ->
                 #a : qType ->
@@ -79,6 +93,7 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 #preV : spec_env g ->
                 #v : fs_oval g a preV ->
                 typing g v ->
+ //               #[default_refinement ()] ref : (ref_type a -> Type0) ->
                 #ref : (ref_type a -> Type0) ->
                 typing g (fs_oval_ref v ref)
 
@@ -121,15 +136,15 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g (fs_oval_nrec n base f)
 
 | QTrue       : #g : typ_env ->
-                #[default_refinement ()] ref:(bool -> Type0) ->
-                typing g (fs_oval_ref (fs_oval_return g #qBool true) ref)
+                #[default_refinement ()] ref:(ref_type qBool -> Type0) ->
+                typing g (fs_oval_return_ref g #qBool true ref)
 | QFalse      : #g : typ_env ->
-                #[default_refinement ()] ref:(bool -> Type0) ->
-                typing g (fs_oval_ref (fs_oval_return g #qBool false) ref)
+                #[default_refinement ()] ref:(ref_type qBool -> Type0) ->
+                typing g (fs_oval_return_ref g #qBool false ref)
 | QStringLit  : #g : typ_env ->
-                s:string ->
-                #[default_refinement ()] ref:(string -> Type0) ->
-                typing g (fs_oval_ref (fs_oval_return g #qString s) ref)
+                s:fs_val qString ->
+                #[default_refinement ()] ref:(ref_type qString -> Type0) ->
+                typing g (fs_oval_return_ref g #qString s ref)
 | QStringEq   : #g : typ_env ->
                 #preS1 : spec_env g ->
                 #s1 : fs_oval g qString preS1 ->

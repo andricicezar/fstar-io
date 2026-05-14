@@ -5,14 +5,28 @@ open Trace
 open RQ.TypingRelation
 open QTypes.HelperTactics
 
+open Examples
+open ExamplesIO
+open ExamplesRefs
+open ExamplesIORefinements
+
 let simplify_via_norm () : Tac unit =
-  explode ();
-  // ignore (repeat forall_intro);
-  iterAll (fun () ->
-    ignore (trytac (fun () ->
-      or_else trivial trefl)))
+  ignore (repeat forall_intro);
+  ignore (trytac (fun () ->
+    or_else trivial trefl));
+  or_else qed (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
 let simplify_d () : Tac unit = norm [delta_only qType_defs_list; iota]
+
+let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g) b wpf)
+  (qx : typing g x) (qf : typing _ f)
+  : typing g (fs_oval_app (fs_oval_lambda f) x)
+  = QApp (QLambda qf) qx
+
+let test_seq_qref ()
+  : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
+  by (dump "H")
+  = pack_turnstile (QLambda (qLet (QApp QAxiom Qtt) Qtt))
 
 val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
@@ -43,8 +57,6 @@ let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (t
 //   = qVar2
 
 #push-options "--no_smt"
-
-open Examples
 
 let test_ut_unit ()
   : qUnit ⊩ ut_unit
@@ -235,11 +247,6 @@ let test_wrap_snd_pa ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambda (QSnd QAxiom))
 
-let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g) b wpf)
-  (qx : typing g x) (qf : typing _ f)
-  : typing g (fs_oval_app (fs_oval_lambda f) x)
-  = QApp (QLambda qf) qx
-
 let three_lets : bool -> unit =
   fun x -> let p = (x, x) in let _y = x in let _z = fst p in ()
 
@@ -333,7 +340,6 @@ let d_test_callback_return' () : _ ⊫ _ =
   mk_turniqet (test_callback_return' ()) ()
 
 #push-options "--no_smt"
-open ExamplesIO
 
 [@@ (preprocess_with simplify_qType)]
 let test_u_return ()
@@ -590,7 +596,6 @@ let d_test_nat_fact_five () : _ ⊫ _
 
 
 #push-options "--no_smt"
-open ExamplesRefs
 
 let test_refbool ()
   : qBoolR (fun t -> t == true) ⊩ refbool
@@ -729,7 +734,6 @@ let d_test_context () : _ ⊫ _
 //   = mk_turniqet (test_pure_fun ()) (_ by (norm [delta; iota]))
 
 #push-options "--no_smt"
-open ExamplesIORefinements
 
 
 
