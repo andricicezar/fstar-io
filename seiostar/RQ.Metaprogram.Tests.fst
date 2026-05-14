@@ -9,6 +9,13 @@ open QTypes.HelperTactics
 
 open Examples
 open ExamplesIO
+open ExamplesRefs
+
+%splice_t[tgt_falsepre] (generate_derivation "tgt_falsepre" (`falsepre))
+%splice_t[tgt_just_true] (generate_derivation "tgt_just_true" (`just_true))
+%splice_t[tgt_moving_ref] (generate_derivation "tgt_moving_ref" (`moving_ref))
+%splice_t[tgt_always_false] (generate_derivation "tgt_always_false" (`always_false))
+%splice_t[tgt_always_false_complex] (generate_derivation "tgt_always_false_complex" (`always_false_complex))
 
 let hocf (agent:bool -> bool -> bool -> bool -> bool -> io bool) : io bool =
   agent true false false true true

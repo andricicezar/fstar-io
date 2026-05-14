@@ -15,6 +15,12 @@ let print_debug (s:string) : Tac unit =
   if debugging () then print s
   else ()
 
+(** Helper used by [fill_trivial_refinements] to fill in [(_:a) -> Type0]
+    implicits without producing an "Unannotated abstraction" warning at SMT
+    encoding time. Defining it as a top-level binding gives the lambda a
+    proper residual computation type. *)
+let trivial_ref0 (#a:Type0) (_:a) : Type0 = Prims.l_True
+
 (** Quotation of types **)
 
 let mk_qunit (oref:option term) : term =
@@ -98,7 +104,17 @@ let rec typ_translation (qt:term) (oref:option term) : Tac term =
   (** erase refinement **)
   | Tv_Refine b ref ->
     let bv = inspect_binder b in
-    typ_translation bv.sort (Some (pack_ln (Tv_Abs b ref)))
+    let lam = pack_ln (Tv_Abs b ref) in
+    (** Re-elaborate the lambda so it gets a residual computation type;
+        otherwise the SMT encoding warns with "Unannotated abstraction". *)
+    let env = top_env () in
+    let (tc_res, _) = tc_term env lam in
+    let lam =
+      match tc_res with
+      | Some r -> let (lam', _) = r in lam'
+      | None -> lam
+    in
+    typ_translation bv.sort (Some lam)
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
@@ -393,26 +409,41 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
 let prove_equality () : Tac unit =
   ignore (repeat forall_intro);
-  ignore (trytac (fun () ->
-    or_else trivial trefl));
+  norm [delta_only [`%get_rel; `%get_Type; `%ref_type; `%ref_type'; `%pack;
+                    `%Mkdtuple2?._1; `%Mkdtuple2?._2];
+        iota; simplify];
+  ignore (repeat split);
+  iterAll (fun () ->
+    ignore (trytac (fun () ->
+      or_else trivial trefl));
+    ignore (trytac smt));
   or_else qed (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
 
 (** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
-    by substituting in [fun (_:X) -> Prims.l_True]. *)
+    by substituting in [fun (_:X) -> Prims.l_True].
+    As we substitute, we also propagate the substitution into the recorded types
+    of the remaining implicits, in case an implicit's domain references an earlier
+    implicit. *)
 let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qderivation:term) : Tac term =
-  fold_left (fun qd (nv, typ) ->
-    let dom =
-      match inspect_ln typ with
-      | Tv_Arrow b _ ->
-        let bv = inspect_binder b in
-        bv.sort
-      | _ -> fail ("Expected an arrow type for implicit, got: " ^ term_to_string typ)
-    in
-    let b = pack_binder { sort = dom; qual = Q_Explicit; attrs = []; ppname = as_ppname "_" } in
-    let true_fun = pack_ln (Tv_Abs b (`Prims.l_True)) in
-    subst_term [FStar.Stubs.Syntax.Syntax.NT nv true_fun] qd
-  ) qderivation l
+  let rec go (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qd:term) : Tac term =
+    match l with
+    | [] -> qd
+    | (nv, typ) :: rest ->
+      let dom =
+        match inspect_ln typ with
+        | Tv_Arrow b _ ->
+          let bv = inspect_binder b in
+          bv.sort
+        | _ -> fail ("Expected an arrow type for implicit, got: " ^ term_to_string typ)
+      in
+      let true_fun = mk_app (`trivial_ref0) [(dom, Q_Implicit)] in
+      let sub = [FStar.Stubs.Syntax.Syntax.NT nv true_fun] in
+      let qd' = subst_term sub qd in
+      let rest' = map (fun (nv', t) -> (nv', subst_term sub t)) rest in
+      go rest' qd'
+  in
+  go l qderivation
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
