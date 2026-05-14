@@ -174,6 +174,8 @@ let mk_wrap_deriv (typj : term) : Tot term =
   let packed_turnstile_g = mk_pack_turnstile_g g_env typj in
   pack_ln (Tv_Abs g_binder packed_turnstile_g)
 
+let mk_qref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit)]
+
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 
@@ -196,11 +198,9 @@ let mk_qeq_string (v1 v2 : term) : term =
   mk_app (`QStringEq) [(v1, Q_Explicit); (v2, Q_Explicit)]
 
 let mk_qmkpair (t1:term) (t2:term) : term =
-  mk_app (`QMkpair) [(t1, Q_Explicit); (t2, Q_Explicit)]
+  mk_app (`QMkpair) [(mk_qref t1, Q_Explicit); (mk_qref t2, Q_Explicit)]
 let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
 let mk_qsnd (t:term) : term = mk_app (`QSnd) [(t, Q_Explicit)]
-
-let mk_qref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit)]
 
 let mk_qinl (t:term) : term = mk_app (`QInl) [(t, Q_Explicit)]
 let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
