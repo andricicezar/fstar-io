@@ -161,7 +161,7 @@ let mk_qweaken (t:term) : term = mk_app (`QWeaken) [(t, Q_Explicit)]
 let rec mk_qvarI (n:int) : term =
   if n <= 0 then mk_qaxiom
   else mk_qweaken (mk_qvarI (n-1))
-let mk_qlambda (body:term) : term = mk_app (`QLambda) [(body, Q_Explicit)]
+let mk_qlambda (body:term) : term = mk_app (`QLambda) [(mk_qref body, Q_Explicit)]
 let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
 
 let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
@@ -398,11 +398,27 @@ let prove_equality () : Tac unit =
   or_else qed (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
 
+(** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
+    by substituting in [fun (_:X) -> Prims.l_True]. *)
+let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qderivation:term) : Tac term =
+  fold_left (fun qd (nv, typ) ->
+    let dom =
+      match inspect_ln typ with
+      | Tv_Arrow b _ ->
+        let bv = inspect_binder b in
+        bv.sort
+      | _ -> fail ("Expected an arrow type for implicit, got: " ^ term_to_string typ)
+    in
+    let b = pack_binder { sort = dom; qual = Q_Explicit; attrs = []; ppname = as_ppname "_" } in
+    let true_fun = pack_ln (Tv_Abs b (`Prims.l_True)) in
+    subst_term [FStar.Stubs.Syntax.Syntax.NT nv true_fun] qd
+  ) qderivation l
+
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
   print_debug ("DEBUG: entering type_check_derivation");
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
-  if List.length l > 0 then fail "Not all implicits solved" else ();
+  let qderivation = fill_trivial_refinements l qderivation in
 
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let qderivation = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
