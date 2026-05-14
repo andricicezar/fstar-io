@@ -14,7 +14,7 @@ let qType_defs_list = [
       `%change_refinement;`%ref_type;`%ref_type';
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
-      `%get_rel; `%get_Type;
+      `%get_rel; `%get_Type; `%pack;
       `%q_io_args; `%q_io_res;
       `%Mkdtuple2?._1;`%Mkdtuple2?._2]
 

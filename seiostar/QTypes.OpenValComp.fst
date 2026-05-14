@@ -65,12 +65,13 @@ let spec_env_return_oval (#g:typ_env) (#a:qType) #preX (x:fs_oval g a preX) : sp
   preX
 
 val spec_env_if : #g :typ_env ->
+                #refC:(bool -> Type0) ->
                 #preC : spec_env g ->
-                c : fs_oval g qBool preC ->
+                c: fs_oval g (qBoolR refC) preC ->
                 preT : spec_env g ->
                 preE : spec_env g ->
                 spec_env g
-let spec_env_if #_ #preC c preT preE =
+let spec_env_if #_ #_ #preC c preT preE =
   (fun fsG -> preC fsG /\ (c fsG ==> preT fsG) /\ ((~(c fsG)) ==> preE fsG))
 
 val spec_env_seq_ghost : #g:typ_env ->
@@ -254,14 +255,15 @@ let fs_oval_eq_string #_ #preS1 s1 #preS2 s2 fsG =
 unfold
 val fs_oval_if : #g :typ_env ->
                  #a  : qType ->
+                 #refC:(bool -> Type0) ->
                  #preC : spec_env g ->
-                 c   : fs_oval g qBool preC ->
+                 c   : fs_oval g (qBoolR refC) preC ->
                  #preT : spec_env g ->
                  t   : fs_oval g a preT ->
                  #preE : spec_env g ->
                  e   : fs_oval g a preE ->
                  fs_oval g a (spec_env_if c preT preE)
-let fs_oval_if #_ #_ #preC c #preT t #preE e fsG =
+let fs_oval_if c t e fsG =
   if c fsG then t fsG else e fsG
 
 unfold
@@ -279,12 +281,13 @@ let fs_oval_pair #_ #_ #_ #preX x #preY y fsG =
 val spec_env_case : #g :typ_env ->
                 #a :qType ->
                 #b  : qType ->
+                #refS:(ref_type (a ^+ b) -> Type0) ->
                 #preCond : spec_env g ->
-                cond : fs_oval g (a ^+ b) preCond ->
+                cond : fs_oval g (qSumR a b refS) preCond ->
                 preInlc : spec_env (extend a g) ->
                 preInrc : spec_env (extend b g) ->
                 spec_env g
-let spec_env_case #_ #_ #_ #preCond cond preInlc preInrc =
+let spec_env_case #_ #_ #_ #_ #preCond cond preInlc preInrc =
   (fun fsG -> preCond fsG /\
     (Inl? (cond fsG) ==> preInlc (stack fsG (Inl?.v (cond fsG)))) /\
     (Inr? (cond fsG) ==> preInrc (stack fsG (Inr?.v (cond fsG)))))
@@ -294,14 +297,15 @@ val fs_oval_case : #g :typ_env ->
                   #a  : qType ->
                   #b  : qType ->
                   #c  : qType ->
+                  #refS:(ref_type (a ^+ b) -> Type0) ->
                   #preCond : spec_env g ->
-                  cond: fs_oval g (a ^+ b) preCond ->
+                  cond : fs_oval g (qSumR a b refS) preCond ->
                   #preInlc : spec_env (extend a g) ->
                   inlc: fs_oval (extend a g) c preInlc ->
                   #preInrc : spec_env (extend b g) ->
                   inrc: fs_oval (extend b g) c preInrc ->
                   fs_oval g c (spec_env_case cond preInlc preInrc)
-let fs_oval_case #_ #_ #_ #_ #preCond cond #preInlc inlc #preInrc inrc fsG =
+let fs_oval_case cond inlc inrc fsG =
   match cond fsG with
   | Inl x ->
     inlc (stack fsG x)
@@ -433,13 +437,14 @@ unfold
 val fs_ocomp_if_oval : #g :typ_env ->
                 #a  : qType ->
                 #preC : spec_env g ->
-                c   : fs_oval g qBool preC ->
+                #refC:(bool -> Type0) ->
+                c   : fs_oval g (qBoolR refC) preC ->
                 #preT : spec_env g ->
                 t   : fs_ocomp g a preT ->
                 #preE : spec_env g ->
                 e   : fs_ocomp g a preE ->
                 fs_ocomp g a (spec_env_if c preT preE)
-let fs_ocomp_if_oval #_ #_ #preC c t e fsG =
+let fs_ocomp_if_oval c t e fsG =
   if c fsG then t fsG else e fsG
 
 val fs_ocomp_if : #g :typ_env ->
@@ -459,7 +464,8 @@ val fs_ocomp_case_val : #g :typ_env ->
                 #a  : qType ->
                 #b : qType ->
                 #c : qType ->
-                cond : fs_val (a ^+ b) ->
+                #refS:(ref_type (a ^+ b) -> Type0) ->
+                cond : fs_val (qSumR a b refS) ->
                 #preInlc : spec_env (extend a g) ->
                 inlc : fs_ocomp (extend a g) c preInlc ->
                 #preInrc : spec_env (extend b g) ->
@@ -475,14 +481,15 @@ val fs_ocomp_case_oval : #g :typ_env ->
                 #a  : qType ->
                 #b : qType ->
                 #c : qType ->
+                #refS:(ref_type (a ^+ b) -> Type0) ->
                 #preCond : spec_env g ->
-                cond : fs_oval g (a ^+ b) preCond ->
+                cond : fs_oval g (qSumR a b refS) preCond ->
                 #preInlc : spec_env (extend a g) ->
                 inlc : fs_ocomp (extend a g) c preInlc ->
                 #preInrc : spec_env (extend b g) ->
                 inrc : fs_ocomp (extend b g) c preInrc ->
                 fs_ocomp g c (spec_env_case cond preInlc preInrc)
-let fs_ocomp_case_oval #_ #_ #_ #_ #preCond cond inlc inrc fsG =
+let fs_ocomp_case_oval cond inlc inrc fsG =
   match cond fsG with
   | Inl x -> inlc (stack fsG x)
   | Inr x -> inrc (stack fsG x)
