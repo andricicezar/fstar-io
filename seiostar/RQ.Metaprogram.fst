@@ -178,7 +178,7 @@ let rec mk_qvarI (n:int) : term =
   if n <= 0 then mk_qaxiom
   else mk_qweaken (mk_qvarI (n-1))
 let mk_qlambda (body:term) : term = mk_app (`QLambda) [(mk_qref body, Q_Explicit)]
-let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
+let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (mk_qref arg, Q_Explicit)]
 
 let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
 let mk_qappcomp (f arg : term) : term = mk_app (`QAppIO) [(f, Q_Explicit); (arg, Q_Explicit)]

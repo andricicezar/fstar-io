@@ -10,6 +10,14 @@ open QTypes.HelperTactics
 open Examples
 open ExamplesIO
 open ExamplesRefs
+open ExamplesIORefinements
+
+%splice_t[tgt_if_x] (generate_derivation "tgt_if_x" (`if_x))
+%splice_t[tgt_seq_qref] (generate_derivation "tgt_seq_qref" (`seq_qref))
+%splice_t[tgt_seq_p_implies_q] (generate_derivation "tgt_seq_p_implies_q" (`seq_p_implies_q))
+%splice_t[tgt_context] (generate_derivation "tgt_context" (`context))
+%splice_t[tgt_io_ghost_seq] (generate_derivation "tgt_io_ghost_seq" (`io_ghost_seq))
+%splice_t[tgt_io_apply_callback] (generate_derivation "tgt_io_apply_callback" (`io_apply_callback))
 
 %splice_t[tgt_falsepre] (generate_derivation "tgt_falsepre" (`falsepre))
 %splice_t[tgt_just_true] (generate_derivation "tgt_just_true" (`just_true))
