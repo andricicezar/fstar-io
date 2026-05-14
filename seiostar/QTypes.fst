@@ -173,7 +173,9 @@ let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
   | QString -> qStringR ref
   | QSum qt1 qt2 -> qSumR (pack qt1) (pack qt2) ref
   | QPair qt1 qt2 -> qPairR (pack qt1) (pack qt2) ref
-  | _ -> t
+  | QNat -> t
+  | QArr _ _ -> t
+  | QArrIO _ _ -> t
 
 let q_io_args (o:io_ops) : qType =
   match o with
