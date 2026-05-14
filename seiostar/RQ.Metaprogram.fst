@@ -202,8 +202,8 @@ let mk_qmkpair (t1:term) (t2:term) : term =
 let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
 let mk_qsnd (t:term) : term = mk_app (`QSnd) [(t, Q_Explicit)]
 
-let mk_qinl (t:term) : term = mk_app (`QInl) [(t, Q_Explicit)]
-let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
+let mk_qinl (t:term) : term = mk_app (`QInl) [(mk_qref t, Q_Explicit)]
+let mk_qinr (t:term) : term = mk_app (`QInr) [(mk_qref t, Q_Explicit)]
 
 (** Construct [QInl #_ #a #b #_ #_ t] / [QInr ...] with [a] (the Inl branch
     qType) and [b] (the Inr branch qType) provided explicitly. This avoids
@@ -213,11 +213,11 @@ let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
 let mk_qinl_explicit (a b inner:term) : term =
   let unk = pack_ln Tv_Unknown in
   mk_app (`QInl) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
-                  (unk, Q_Implicit); (unk, Q_Implicit); (inner, Q_Explicit)]
+                  (unk, Q_Implicit); (unk, Q_Implicit); (mk_qref inner, Q_Explicit)]
 let mk_qinr_explicit (a b inner:term) : term =
   let unk = pack_ln Tv_Unknown in
   mk_app (`QInr) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
-                  (unk, Q_Implicit); (unk, Q_Implicit); (inner, Q_Explicit)]
+                  (unk, Q_Implicit); (unk, Q_Implicit); (mk_qref inner, Q_Explicit)]
 let mk_qcase (t:term) (x1:term) (x2:term) : term =
   mk_app (`QCase) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 

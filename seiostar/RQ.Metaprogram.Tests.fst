@@ -13,7 +13,7 @@ open ExamplesRefs
 open ExamplesIORefinements
 
 %splice_t[tgt_io_pair_ref] (generate_derivation "tgt_io_pair_ref" (`io_pair_ref))
-// %splice_t[tgt_io_inl_ref] (generate_derivation "tgt_io_inl_ref" (`io_inl_ref))
+%splice_t[tgt_io_inl_ref] (generate_derivation "tgt_io_inl_ref" (`io_inl_ref))
 
 %splice_t[tgt_simple_erase_ref] (generate_derivation "tgt_simple_erase_ref" (`simple_erase_ref))
 %splice_t[tgt_simple_reref_id] (generate_derivation "tgt_simple_reref_id" (`simple_reref_id))
