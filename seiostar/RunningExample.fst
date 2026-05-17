@@ -440,7 +440,6 @@ let read_validate_sat_spec (f task contents : string) :
   theta_monad_morphism_ret (Inr #unit #unit ())
 #pop-options
 
-#push-options "--z3rlimit 100"
 let inner_computation_sat_spec (f task contents : string) (agent : string -> string -> io unit) :
   Lemma (requires theta (agent f task) ⊑ agent_spec) (ensures
     theta (
@@ -463,7 +462,23 @@ let inner_computation_sat_spec (f task contents : string) (agent : string -> str
       )
     )
   )
-= assert (
+= let body : unit -> io (resexn unit) = fun () ->
+    let!@! new_contents = read_file f in
+    if validate contents task new_contents
+    then io_return (Inl ())
+    else io_return (Inr ())
+  in
+  let body_spec : unit -> hist (resexn unit) = fun () ->
+    hist_bind (read_file_spec f) (fun res' ->
+      match res' with
+      | Inl new_contents ->
+        hist_if_then_else
+          (hist_return (Inl ()))
+          (hist_return (Inr ()))
+          (validate contents task new_contents)
+      | Inr x -> hist_return (Inr x))
+  in
+  assert (
     theta (
       let!@ () = agent f task in
       let!@! new_contents = read_file f in
@@ -472,23 +487,12 @@ let inner_computation_sat_spec (f task contents : string) (agent : string -> str
       else io_return (Inr ())
     )
     ==
-    theta (
-      io_bind (agent f task) (fun () ->
-        let!@! new_contents = read_file f in
-        if validate contents task new_contents
-        then io_return (Inl ())
-        else io_return (Inr ())
-      )
-    )
+    theta (io_bind (agent f task) body)
   ) by (compute(); trefl());
-  theta_monad_morphism_bind (agent f task) (fun () ->
-    let!@! new_contents = read_file f in
-    if validate contents task new_contents
-    then io_return (Inl ())
-    else io_return (Inr ())
-  );
-  read_validate_sat_spec f task contents
-#pop-options
+  theta_monad_morphism_bind (agent f task) body;
+  read_validate_sat_spec f task contents;
+  assert (forall (u:unit). theta (body u) ⊑ body_spec u);
+  lem_hist_bind_subset (theta (agent f task)) agent_spec (fun u -> theta (body u)) body_spec
 
 #push-options "--z3rlimit 100"
 let wrapper_inner_step (f task : string) (agent : string -> string -> io unit) :
@@ -521,16 +525,16 @@ let wrapper_inner_step (f task : string) (agent : string -> string -> io unit) :
         )
       | Inr x -> hist_return (Inr x))
   )
-= lem_hist_bind_match_resexn_subset (read_file_spec f)
-    (fun contents ->
+= let k1 (contents:string) : hist (resexn unit) =
       theta (
         let!@ () = agent f task in
         let!@! new_contents = read_file f in
         if validate contents task new_contents
         then io_return (Inl ())
         else io_return (Inr ())
-      ))
-    (fun contents ->
+      )
+  in
+  let k2 (contents:string) : hist (resexn unit) =
       hist_bind agent_spec (fun () ->
         hist_bind (read_file_spec f) (fun res' ->
           match res' with
@@ -541,14 +545,19 @@ let wrapper_inner_step (f task : string) (agent : string -> string -> io unit) :
               (validate contents task new_contents)
           | Inr x -> hist_return (Inr x)
         )
-      ))
-    (fun contents -> inner_computation_sat_spec f task contents agent)
+      )
+  in
+  let pf (contents:string) : Lemma (k1 contents ⊑ k2 contents) =
+    inner_computation_sat_spec f task contents agent
+  in
+  lem_hist_bind_match_resexn_subset (read_file_spec f) k1 k2 pf
 #pop-options
 
 #push-options "--fuel 4 --ifuel 2"
 let lem_fst_read_from_prefix (f:string) (fd:file_descr) (contents:string) (rest:trace) :
   Lemma (ensures (
     fst_read_from f (List.Tot.append [EvOpen f (Inl fd); EvRead fd (Inl contents); EvClose fd (Inl ())] rest) = Some contents))
+    [SMTPat (fst_read_from f (List.Tot.append [EvOpen f (Inl fd); EvRead fd (Inl contents); EvClose fd (Inl ())] rest))]
 = ()
 #pop-options
 
@@ -557,10 +566,11 @@ open FStar.List.Tot.Properties
 #push-options "--fuel 5 --ifuel 2 --z3rlimit 50"
 let lem_last_read_from_suffix (f:string) (fd:file_descr) (nc:string) (prefix:trace) :
   Lemma (ensures last_read_from f (List.Tot.append prefix [EvOpen f (Inl fd); EvRead fd (Inl nc); EvClose fd (Inl ())]) = Some nc)
+    [SMTPat (last_read_from f (List.Tot.append prefix [EvOpen f (Inl fd); EvRead fd (Inl nc); EvClose fd (Inl ())]))]
 = rev_append prefix [EvOpen f (Inl fd); EvRead fd (Inl nc); EvClose fd (Inl ())]
 #pop-options
 
-#push-options "--fuel 8 --ifuel 4 --z3rlimit 200"
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 30"
 let wrapper_sat_spec_aux f task agent :
   Lemma (
     hist_bind (read_file_spec f) (fun res ->
@@ -581,67 +591,13 @@ let wrapper_sat_spec_aux f task agent :
     ) ⊑
     wrapper_spec f task
   )
-= introduce
-    forall h p.
-      wrapper_spec f task h p ==>
-      hist_bind (read_file_spec f) (fun res ->
-        match res with
-        | Inl contents ->
-          hist_bind agent_spec (fun () ->
-            hist_bind (read_file_spec f) (fun res' ->
-              match res' with
-              | Inl new_contents ->
-                hist_if_then_else
-                  (hist_return (Inl ()))
-                  (hist_return (Inr ()))
-                  (validate contents task new_contents)
-              | Inr x -> hist_return (Inr x)
-            )
-          )
-        | Inr x -> hist_return (Inr x)
-      ) h p
-  with begin
-    let rev_lem (a b : trace) : Lemma (ensures List.rev (List.Tot.append a b) == List.Tot.append (List.rev b) (List.rev a)) [SMTPat (List.rev (List.Tot.append a b))] =
-      rev_append a b
-    in
-    calc (==>) {
-      wrapper_spec f task h p ;
-      ==> { () }
-      read_file_spec f h (hist_post_bind' (fun res ->
-        match res with
-        | Inl contents ->
-          hist_bind agent_spec (fun () ->
-            hist_bind (read_file_spec f) (fun res' ->
-              match res' with
-              | Inl new_contents ->
-                hist_if_then_else
-                  (hist_return (Inl ()))
-                  (hist_return (Inr ()))
-                  (validate contents task new_contents)
-              | Inr x -> hist_return (Inr x)
-            )
-          )
-        | Inr () -> hist_return (Inr ())
-      ) p) ;
-      == {}
-      hist_bind (read_file_spec f) (fun res ->
-        match res with
-        | Inl contents ->
-          hist_bind agent_spec (fun () ->
-            hist_bind (read_file_spec f) (fun res' ->
-              match res' with
-              | Inl new_contents ->
-                hist_if_then_else
-                  (hist_return (Inl ()))
-                  (hist_return (Inr ()))
-                  (validate contents task new_contents)
-              | Inr x -> hist_return (Inr x)
-            )
-          )
-        | Inr () -> hist_return (Inr ())
-      ) h p ;
-    }
-  end
+= let rev_lem (a b : trace) : Lemma (ensures List.rev (List.Tot.append a b) == List.Tot.append (List.rev b) (List.rev a)) [SMTPat (List.rev (List.Tot.append a b))] =
+    rev_append a b
+  in
+  let aa_lem (a b c : trace) : Lemma (ensures List.Tot.append a (List.Tot.append b c) == List.Tot.append (List.Tot.append a b) c) [SMTPat (List.Tot.append a (List.Tot.append b c))] =
+    append_assoc a b c
+  in
+  ()
 #pop-options
 
 let wrapper_sat_spec f task agent :
@@ -761,15 +717,34 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 
-%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+
+%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+
+[@@ (preprocess_with simplify_qType)]
+let main_derivation () : ((qString ^-> qString ^->!@ qUnit) ^->!@ qBool) ⊩ main
+  by (RQ.TypingRelation.Tests.simplify_via_norm ())
+  = pack_turnstile (QLambdaIO (
+      QBind
+        (QAppIO
+          (QApp (QApp (dsnd (wrapper_derivation _)) (QStringLit "./temp"))
+                (QStringLit "overwrite\n"))
+          QAxiom)
+        (QCaseIO QAxiom
+          (QReturn QTrue)
+          (QReturn QFalse))))
 
 let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
 }
 
+
+let main' () : fs_val (re_int.ct ^->!@ qBool) by (compute ()) =
+  main
+
 val ps_main : progS re_int
-let ps_main : progS re_int=
-  (| main, main_derivation empty |)
+let ps_main : progS re_int =
+  (| main' (), (| main_derivation empty, (_ by (norm [delta; iota])) |) |)
 
 let pt_main = RrHP.compile_prog ps_main
 

@@ -11,7 +11,7 @@ let simplify_stack_ops () : Tac unit =
 let qType_defs_list = [
       `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
       `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;
-      `%change_refinement;`%ref_type;`%ref_type';
+      `%change_refinement;`%ref_type;`%ref_type';`%pack;
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type;

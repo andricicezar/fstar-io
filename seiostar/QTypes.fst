@@ -44,8 +44,8 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QBool #ref -> assert (t == x:bool{ref x})
   | QFileDescriptor #ref -> assert (t == x:file_descr{ref x})
   | QString #ref -> assert (t == x:string{ref x})
-  | QArr #t1 #t2 _ _ -> assert (t == ((x:t1 -> y:t2)))
-  | QArrIO #t1 #t2 _ _ -> assert (t == ((x:t1 -> io (y:t2))))
+  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
+  | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ #ref -> assert (t == (x:(t1 & t2){ref x}))
   | QSum #t1 #t2 _ _ #ref -> assert (t == (x:(either t1 t2){ref x}))
   | QUnit -> assert (t == unit)
@@ -165,7 +165,6 @@ unfold
 let ref_type (t:qType) : Type0 =
   ref_type' (get_rel t)
 
-unfold
 let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
   match get_rel t with
   | QUnit -> qUnitR ref
@@ -174,7 +173,9 @@ let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
   | QString -> qStringR ref
   | QSum qt1 qt2 -> qSumR (pack qt1) (pack qt2) ref
   | QPair qt1 qt2 -> qPairR (pack qt1) (pack qt2) ref
-  | _ -> t
+  | QNat -> t
+  | QArr _ _ -> t
+  | QArrIO _ _ -> t
 
 let q_io_args (o:io_ops) : qType =
   match o with
@@ -191,8 +192,7 @@ let q_io_res (o:io_ops) : qType =
   | OClose -> qResexn qUnit
 
 let lem_q_io_args (o:io_ops) :
-  Lemma (get_Type (q_io_args o) == io_args o)
-  [SMTPat (q_io_args o)] =
+  Lemma (get_Type (q_io_args o) == io_args o) =
   match o with
   | OOpen -> assert (get_Type (q_io_args OOpen) == io_args OOpen) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
   | ORead -> assert (get_Type (q_io_args ORead) == io_args ORead) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
@@ -200,8 +200,7 @@ let lem_q_io_args (o:io_ops) :
   | OClose -> assert (get_Type (q_io_args OClose) == io_args OClose) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
 
 let lem_q_io_res (o:io_ops) :
-  Lemma (forall (a:io_args o). get_Type (q_io_res o) == io_res o a)
-  [SMTPat (q_io_res o)] =
+  Lemma (forall (a:io_args o). get_Type (q_io_res o) == io_res o a) =
   match o with
   | OOpen -> assert (get_Type (q_io_res OOpen) == resexn file_descr) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
   | ORead -> assert (get_Type (q_io_res ORead) == resexn string) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())

@@ -126,6 +126,7 @@ type typing : typ_env -> exp -> qType -> Type =
            $h3:typing g e3 (a ^->!@ a) ->
            typing g (ENRec e1 e2 e3) a
 
+#push-options "--split_queries always"
 val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t (fun _ -> True)
 let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
   match e with
@@ -203,6 +204,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
     let h2 : typing g _ a = h2 in
     let h3 : typing g _ (a ^->!@ a) = h3 in
     fs_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
+#pop-options
 
 private
 let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' (q_io_args o))
@@ -210,7 +212,18 @@ let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' 
   = assert (backtranslate_exp (TyCall o h') == fs_ocomp_call o (backtranslate_exp h'))
       by (norm [delta_only [`%backtranslate_exp]; zeta; iota]; trefl ())
 
-#push-options "--z3rlimit 10"
+#push-options "--z3rlimit 128 --fuel 1 --ifuel 0 --split_queries always"
+private
+let backtranslate_exp_string_eq_superset (#g:typ_env) (#e1 #e2:exp)
+  (h1:typing g e1 qString) (h2:typing g e2 qString)
+  : Lemma
+    (requires backtranslate_exp h1 ⊒ e1 /\ backtranslate_exp h2 ⊒ e2)
+    (ensures backtranslate_exp (TyStringEq h1 h2) ⊒ EStringEq e1 e2)
+  =
+  C1.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+#pop-options
+
+#push-options "--z3rlimit 64 --split_queries always"
 let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
   | EUnit -> C1.compat_ocomp_unit g
@@ -226,18 +239,30 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
   | EVar x -> C1.compat_ocomp_var g x
   | EApp _ _ ->
     let TyApp #t1 #t2 #e1 #e2 h1 h2 = h in
+    let h1 : typing g e1 (t1 ^->!@ t2) = h1 in
+    let h2 : typing g e2 t1 = h2 in
+    let fs_e1 : fs_ocomp g (t1 ^->!@ t2) (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g t1 (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_ocomp_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    assert (fs_e1 ⊒ e1);
+    assert (fs_e2 ⊒ e2);
+    C1.compat_ocomp_app #g #t1 #t2 #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_superset_exp hbody;
     C1.compat_ocomp_lambda (backtranslate_exp hbody) body
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
+    let h1 : typing g e1 t1 = h1 in
+    let h2 : typing g e2 t2 = h2 in
+    let fs_e1 : fs_ocomp g t1 (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g t2 (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    assert (fs_e1 ⊒ e1);
+    assert (fs_e2 ⊒ e2);
+    C1.compat_ocomp_pair #g #t1 #t2 #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
   | EFst _ ->
     let TyFst #t1 #t2 #e' h' = h in
     lem_backtranslate_superset_exp h';
@@ -269,9 +294,11 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     backtranslate_exp_call_eq o h'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
+    let h1 : typing g e1 qString = h1 in
+    let h2 : typing g e2 qString = h2 in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    backtranslate_exp_string_eq_superset h1 h2
   | EZero -> C1.compat_ocomp_zero g
   | ESucc e' ->
     let TySucc h' = h in
@@ -279,13 +306,19 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     C1.compat_ocomp_succ (backtranslate_exp h') e'
   | ENRec e1 e2 e3 ->
     let TyNRec #a h1 h2 h3 = h in
-    let h1 : typing g _ qNat = h1 in
-    let h2 : typing g _ a = h2 in
-    let h3 : typing g _ (a ^->!@ a) = h3 in
+    let h1 : typing g e1 qNat = h1 in
+    let h2 : typing g e2 a = h2 in
+    let h3 : typing g e3 (a ^->!@ a) = h3 in
+    let fs_e1 : fs_ocomp g qNat (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g a (fun _ -> True) = backtranslate_exp h2 in
+    let fs_e3 : fs_ocomp g (a ^->!@ a) (fun _ -> True) = backtranslate_exp h3 in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
     lem_backtranslate_superset_exp h3;
-    C1.compat_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+    assert (fs_e1 ⊒ e1);
+    assert (fs_e2 ⊒ e2);
+    assert (fs_e3 ⊒ e3);
+    C1.compat_ocomp_nrec #g #a #(fun _ -> True) fs_e1 #(fun _ -> True) fs_e2 #(fun _ -> True) fs_e3 e1 e2 e3
 
 let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊑ e) =
    match e with
@@ -302,18 +335,30 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
   | EVar x -> C2.compat_ocomp_var g x
   | EApp _ _ ->
     let TyApp #t1 #t2 #e1 #e2 h1 h2 = h in
+    let h1 : typing g e1 (t1 ^->!@ t2) = h1 in
+    let h2 : typing g e2 t1 = h2 in
+    let fs_e1 : fs_ocomp g (t1 ^->!@ t2) (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g t1 (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_ocomp_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    assert (fs_e1 ⊑ e1);
+    assert (fs_e2 ⊑ e2);
+    C2.compat_ocomp_app #g #t1 #t2 #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_subset_exp hbody;
     C2.compat_ocomp_lambda (backtranslate_exp hbody) body
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
+    let h1 : typing g e1 t1 = h1 in
+    let h2 : typing g e2 t2 = h2 in
+    let fs_e1 : fs_ocomp g t1 (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g t2 (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    assert (fs_e1 ⊑ e1);
+    assert (fs_e2 ⊑ e2);
+    C2.compat_ocomp_pair #g #t1 #t2 #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
   | EFst _ ->
     let TyFst #t1 #t2 #e' h' = h in
     lem_backtranslate_subset_exp h';
@@ -345,9 +390,15 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     backtranslate_exp_call_eq o h'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
+    let h1 : typing g e1 qString = h1 in
+    let h2 : typing g e2 qString = h2 in
+    let fs_e1 : fs_ocomp g qString (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g qString (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    assert (fs_e1 ⊑ e1);
+    assert (fs_e2 ⊑ e2);
+    C2.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
   | EZero -> C2.compat_ocomp_zero g
   | ESucc e' ->
     let TySucc h' = h in
@@ -355,13 +406,19 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     C2.compat_ocomp_succ (backtranslate_exp h') e'
   | ENRec e1 e2 e3 ->
     let TyNRec #a h1 h2 h3 = h in
-    let h1 : typing g _ qNat = h1 in
-    let h2 : typing g _ a = h2 in
-    let h3 : typing g _ (a ^->!@ a) = h3 in
+    let h1 : typing g e1 qNat = h1 in
+    let h2 : typing g e2 a = h2 in
+    let h3 : typing g e3 (a ^->!@ a) = h3 in
+    let fs_e1 : fs_ocomp g qNat (fun _ -> True) = backtranslate_exp h1 in
+    let fs_e2 : fs_ocomp g a (fun _ -> True) = backtranslate_exp h2 in
+    let fs_e3 : fs_ocomp g (a ^->!@ a) (fun _ -> True) = backtranslate_exp h3 in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     lem_backtranslate_subset_exp h3;
-    C2.compat_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+    assert (fs_e1 ⊑ e1);
+    assert (fs_e2 ⊑ e2);
+    assert (fs_e3 ⊑ e3);
+    C2.compat_ocomp_nrec #g #a #(fun _ -> True) fs_e1 #(fun _ -> True) fs_e2 #(fun _ -> True) fs_e3 e1 e2 e3
 #pop-options
 
 let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =

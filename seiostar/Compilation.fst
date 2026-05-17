@@ -331,33 +331,34 @@ and lem_compile_fv_in_env_prod #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typi
     lem_fv_in_env_case g ta tb (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
-  (qs:(a ^->!@ b) ⊫ s)
-  : Lemma (requires (QLambdaIO? qs._3))
-          (ensures (ELam? (compile qs._3)))
+  (qs:(a ^->!@ b) ⊩ s)
+  : Lemma (requires (QLambdaIO? qs._2))
+          (ensures (ELam? (compile qs._2)))
   =
-  match qs._3 with
+  match qs._2 with
   | QLambdaIO qbody ->
-    assert (ELam? (compile qs._3)) by (norm [delta_once [`%compile];zeta;iota])
+    assert (ELam? (compile qs._2)) by (norm [delta_once [`%compile];zeta;iota])
 
-let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
-  : Lemma (is_closed (compile qs._3))
-  = lem_compile_fv_in_env qs._3
+let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
+  : Lemma (is_closed (compile qs._2))
+  = lem_compile_fv_in_env qs._2;
+    lem_no_fv_is_closed (compile qs._2)
 
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
   : Lemma
-    (requires (QLambdaIO? qs._3))
+    (requires (QLambdaIO? qs._1._2))
     (ensures (
-        is_closed (compile qs._3) /\
-        is_value (compile qs._3) /\
-        valid_contains s (compile qs._3) /\
-        valid_member_of s (compile qs._3)
+        is_closed (compile qs._1._2) /\
+        is_value (compile qs._1._2) /\
+        valid_contains s (compile qs._1._2) /\
+        valid_member_of s (compile qs._1._2)
       )) =
-  match qs._3 with
+  match qs._1._2 with
   | QLambdaIO #_ #b #c qbody ->
-    lem_compile_is_closed qs;
-    lem_compile_closed_arrow_is_elam #b #c #s qs;
-    assert (is_value (compile qs._3));
-    lem_compile_superset qs._3;
-    lem_value_superset_valid_contains a #qs._1 (fun _ -> s) (compile qs._3);
-    lem_compile_subset qs._3;
-    lem_value_subset_valid_member_of a #qs._1 (fun _ -> s) (compile qs._3)
+    lem_compile_is_closed qs._1;
+    lem_compile_closed_arrow_is_elam #b #c #s qs._1;
+    assert (is_value (compile qs._1._2)) by (compute ());
+    lem_compile_superset qs._1._2;
+    lem_value_superset_valid_contains a #qs._1._1 (fun _ -> s) (compile qs._1._2);
+    lem_compile_subset qs._1._2;
+    lem_value_subset_valid_member_of a #qs._1._1 (fun _ -> s) (compile qs._1._2)
