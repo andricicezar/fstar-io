@@ -29,10 +29,10 @@ let rec io_bind
 let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
   Call o args Return
 
-let return = io_return
-let (let!@) = io_bind
+unfold let return = io_return
+unfold let (let!@) = io_bind
 
-let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
+unfold let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
   | Inl x -> k x
   | Inr x -> io_return (Inr x)

@@ -6,16 +6,19 @@ open QTypes.OpenValComp
 (** Tactics to simplify qTypes **)
 
 let simplify_stack_ops () : Tac unit =
-   l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
+  norm [delta_fully [`%QTypes.EvalEnv.stack;`%QTypes.EvalEnv.tail;`%QTypes.EvalEnv.hd]; primops; iota]
+  // REWRITING TAKES A LOOOOONG TIME
+  // l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
 let qType_defs_list = [
-      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
+      `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
       `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;
-      `%change_refinement;`%ref_type;`%ref_type';`%pack;
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
-      `%get_rel; `%get_Type;
       `%q_io_args; `%q_io_res;
+      `%fs_oval; `%fs_val;
+      `%change_refinement;`%ref_type;`%ref_type';`%pack;
+      `%get_rel; `%get_Type;
       `%Mkdtuple2?._1;`%Mkdtuple2?._2]
 
 let simplify_qType_g g (x:term) : Tac term =

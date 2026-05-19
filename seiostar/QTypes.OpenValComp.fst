@@ -540,6 +540,7 @@ let fs_ocomp_pair x y =
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (fs_val_pair x' y')))
 
+unfold
 val fs_ocomp_string_eq : #g : typ_env ->
                          #preX : spec_env g ->
                          x : fs_ocomp g qString preX ->
@@ -551,6 +552,7 @@ let fs_ocomp_string_eq x y =
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
 
+unfold
 let fs_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_val a) : fs_val a =
   io_nrec n b f
 
