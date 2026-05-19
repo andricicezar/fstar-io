@@ -6,9 +6,8 @@ open QTypes.OpenValComp
 (** Tactics to simplify qTypes **)
 
 let simplify_stack_ops () : Tac unit =
-  norm [delta_fully [`%QTypes.EvalEnv.stack;`%QTypes.EvalEnv.tail;`%QTypes.EvalEnv.hd]; primops; iota]
   // REWRITING TAKES A LOOOOONG TIME
-  // l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
+  l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
 let qType_defs_list = [
       `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;

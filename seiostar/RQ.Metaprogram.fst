@@ -15,12 +15,6 @@ let print_debug (s:string) : Tac unit =
   if debugging () then print s
   else ()
 
-(** Helper used by [fill_trivial_refinements] to fill in [(_:a) -> Type0]
-    implicits without producing an "Unannotated abstraction" warning at SMT
-    encoding time. Defining it as a top-level binding gives the lambda a
-    proper residual computation type. *)
-unfold let trivial_ref0 (#a:Type0) (_:a) : Type0 = True
-
 (** Quotation of types **)
 
 let mk_qunit (oref:option term) : term =
@@ -400,42 +394,18 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
          mk_qsucc (create_derivation g dbmap prior_derivs fuel false fstar_ty v1)
        | _ -> fail "only n + 1 (successor) is supported for nat addition")
     | _ ->
-      (** Beta-reduce applications of inlined functions at the source level.
-          If [hd] is a top-level FVar whose body is a lambda, substitute [a]
-          into the body instead of generating [QApp (QLambda body_d) a_d].
-          That pattern would embed the full [body_d] derivation inside the
-          outer [QApp]'s [#f]/[#preF] implicits (and again as the typing
-          argument), with the bloat compounding upward through every
-          ancestor [QRef]/[QLambda]'s [#v]/[#body]/[#preV]/[#preBody]
-          implicit. Empirically responsible for the bulk of the implicit
-          blowup on examples like [negb_pred] (148k-line derivation with
-          [--print_implicits] collapses to a few hundred chars). *)
-      let try_beta : option term =
-        match get_fv hd with
-        | Some fnm ->
-          let fbody = norm_term_env (top_env ()) [delta_only [fnm]; zeta] hd in
-          (match inspect_ln fbody with
-           | Tv_Abs _ body ->
-             let sub = [FStar.Stubs.Syntax.Syntax.DT 0 a] in
-             Some (subst_term sub body)
+      let arg_fstar_ty =
+        match tc_term g hd with
+        | Some (_, (_, ty)), _ ->
+          (match inspect_ln ty with
+           | Tv_Arrow b _ -> Some (binder_sort b)
            | _ -> None)
         | _ -> None
       in
-      (match try_beta with
-       | Some qfs' -> create_derivation g dbmap prior_derivs fuel is_comp fstar_ty qfs'
-       | None ->
-         let arg_fstar_ty =
-           match tc_term g hd with
-           | Some (_, (_, ty)), _ ->
-             (match inspect_ln ty with
-              | Tv_Arrow b _ -> Some (binder_sort b)
-              | _ -> None)
-           | _ -> None
-         in
-         let f = (create_derivation g dbmap prior_derivs fuel false None hd) in
-         let x = (create_derivation g dbmap prior_derivs fuel false arg_fstar_ty a) in
-         if is_comp then mk_qappcomp f x
-         else mk_qapp f x)
+      let f = (create_derivation g dbmap prior_derivs fuel false None hd) in
+      let x = (create_derivation g dbmap prior_derivs fuel false arg_fstar_ty a) in
+      if is_comp then mk_qappcomp f x
+      else mk_qapp f x
   end
 
   | Tv_Const C_Unit -> mk_qtt
@@ -508,8 +478,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
 let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
   ignore (repeat forall_intro);
-  norm [delta_only [`%get_rel; `%get_Type; `%ref_type; `%ref_type'; `%pack;
-                    `%Mkdtuple2?._1; `%Mkdtuple2?._2;];
+  norm [delta_only qType_defs_list;
         delta_only unfold_names;
         delta_qualifier ["unfold"];
         simplify; primops; iota;
@@ -524,12 +493,14 @@ let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
     primops; iota;
     simplify];
   ignore (repeat split);**)
-  // dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
+  dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
   print ("PROVE_EQ_DUMP_END " ^ nm);
   or_else
     (fun () -> or_else trivial trefl)
     (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
+
+unfold let trivial_ref0 (#a:Type0) (_:a) : Type0 = True
 
 (** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
     by substituting in [fun (_:X) -> Prims.l_True].
@@ -567,26 +538,16 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let qderivation = fill_trivial_refinements l qderivation in
   print_debug ("DEBUG: done filling refinements");
-  // let qderivation = norm_well_typed_term g [delta_only [`%change_refinement; `%get_rel]; primops; iota; simplify] qderivation in (** TODO: try delta_fully here **)
-  print_debug ("DEBUG: done normalizing qTypes in qDerivation");
-  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  print_debug ("DEBUG: Checking implicits again ...");
-  // let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) false in
-  // fail "Awesome!";
-  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  // if List.length l > 0 then fail "Implicits uninstantiated" else ();
 
-  // print_debug ("DEBUG: desired_qtyp = " ^ term_to_string desired_qtyp);
-  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let qderivation = norm_well_typed_term g [delta_only qType_defs_list; primops; iota; simplify] qderivation in
-
   print_debug ("DEBUG: done normalizing derivation");
+
   // print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
   let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; iota] desired_qtyp in
   print_debug ("DEBUG: before core_check_term");
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
-
   print_debug ("DEBUG: core_checm_term successfull, "^ string_of_int (ngoals ()) ^" goals to prove");
+
   (match ngoals () with
   | 0 -> ()
   | 1 ->  with_compat_pre_core 0 (fun () -> prove_equality nm unfold_names)
@@ -640,6 +601,10 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
         ("RunningExample.read_file", `read_file_d)
       ])
 **)
+let use_deriv (deriv:term) : term =
+  mk_app (`dsnd) [
+      (mk_app deriv [(pack_ln Tv_Unknown, Q_Explicit)], Q_Explicit)] // the g_env argument will be filled in by the caller's context
+
 let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & term)) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
@@ -647,7 +612,7 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     (** Build prior_derivs: map source fvar names to `deriv_fvar _`.
         Use Tv_Unknown for the typing environment (g_env : typ_env) expected
         by the prior derivations, letting F*'s typechecker infer it. **)
-    let prior_derivs = deps |> map (fun (src_name, deriv) -> (src_name, mk_app deriv [(pack_ln Tv_Unknown, Q_Implicit)])) in
+    let prior_derivs = deps |> map (fun (src_name, deriv) -> (src_name, use_deriv deriv)) in
     let t0 = curms () in
     print ("SPLICE_BEGIN " ^ nm ^ " " ^ string_of_int t0);
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping prior_derivs qprog in
