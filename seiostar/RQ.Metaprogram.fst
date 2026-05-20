@@ -476,6 +476,17 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
+(* Opaque wrapper that extracts the typing derivation from a packed turnstile.
+   This is intentionally NOT marked `unfold` so that uses of `unwrap_deriv X`
+   remain symbolic (a single fvar application) on both sides of equality checks
+   in the metaprogram. Unfolding `dsnd` via nbe would expand to a match
+   expression whose anonymous binder receives fresh internal UIDs at each
+   occurrence, making textually-identical terms compare unequal in
+   `refl_core_check_term`. *)
+let unwrap_deriv (#g:typ_env) (#a:qType) (#x:fs_val a) (p:packed_turnstile_g g a x)
+  : g ⊢ fs_oval_helper_g g x (dfst p)
+  = dsnd p
+
 let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
   ignore (repeat forall_intro);
   norm [delta_only qType_defs_list;
@@ -581,7 +592,10 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping [] qprog in
     let t1 = curms () in
     print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
-    ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
+    let (b, se, blob) = mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation in
+    let se = set_sigelt_quals [Irreducible] se in
+    let se = set_sigelt_attrs [(`("opaque_to_smt"))] se in
+    ([], (b, se, blob), [])
   end
 
 (** Generate a derivation for a program, reusing already-generated derivations.
@@ -601,8 +615,9 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
         ("RunningExample.read_file", `read_file_d)
       ])
 **)
+
 let use_deriv (deriv:term) : term =
-  mk_app (`dsnd) [
+  mk_app (`unwrap_deriv) [
       (mk_app deriv [(pack_ln Tv_Unknown, Q_Explicit)], Q_Explicit)] // the g_env argument will be filled in by the caller's context
 
 let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & term)) : dsl_tac_t = fun (g, expected_t) ->
@@ -618,5 +633,8 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping prior_derivs qprog in
     let t1 = curms () in
     print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
-    ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
+    let (b, se, blob) = mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation in
+    let se = set_sigelt_quals [Irreducible] se in
+    let se = set_sigelt_attrs [(`("opaque_to_smt"))] se in
+    ([], (b, se, blob), [])
   end
