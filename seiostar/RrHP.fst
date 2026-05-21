@@ -15,10 +15,12 @@ noeq type intS = {
   ct : qType;
 }
 
-type progS (i:intS) =
+type progS_raw (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
-  qs:((i.ct ^->!@ qBool) ⊫ ps){ QLambdaIO? qs._1._2 }
+  ((i.ct ^->!@ qBool) ⊫ ps)
+
+type progS (i:intS) = p:progS_raw i { is_lambda_io p._2._1._2 }
 
 type ctxS (i:intS) = fs_val i.ct
 type wholeS = fs_comp qBool
