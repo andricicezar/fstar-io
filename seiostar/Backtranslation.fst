@@ -206,13 +206,27 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
     fs_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
 #pop-options
 
+#push-options "--z3rlimit 32 --fuel 2 --ifuel 2"
 private
 let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' (q_io_args o))
-  : Lemma (backtranslate_exp (TyCall o h') == fs_ocomp_call o (backtranslate_exp h'))
-  = assert (backtranslate_exp (TyCall o h') == fs_ocomp_call o (backtranslate_exp h'))
+  : Lemma (backtranslate_exp (TyCall o h') ==
+           (fs_ocomp_call o (backtranslate_exp h') <: fs_ocomp g (q_io_res o) (fun _ -> True)))
+  = let rhs : fs_ocomp g (q_io_res o) (fun _ -> True) = fs_ocomp_call o (backtranslate_exp h') in
+    assert (backtranslate_exp (TyCall o h') == rhs)
       by (norm [delta_only [`%backtranslate_exp]; zeta; iota]; trefl ())
+#pop-options
 
-#push-options "--z3rlimit 128 --fuel 1 --ifuel 0 --split_queries always"
+#push-options "--z3rlimit 128 --fuel 2 --ifuel 2 --split_queries always"
+private
+let backtranslate_exp_string_eq_eq (#g:typ_env) (#e1 #e2:exp)
+  (h1:typing g e1 qString) (h2:typing g e2 qString)
+  : Lemma (backtranslate_exp (TyStringEq h1 h2) ==
+           (fs_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) <: fs_ocomp g qBool (fun _ -> True)))
+  =
+  let rhs : fs_ocomp g qBool (fun _ -> True) = fs_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) in
+  assert (backtranslate_exp (TyStringEq h1 h2) == rhs)
+    by (norm [delta_only [`%backtranslate_exp]; zeta; iota]; trefl ())
+
 private
 let backtranslate_exp_string_eq_superset (#g:typ_env) (#e1 #e2:exp)
   (h1:typing g e1 qString) (h2:typing g e2 qString)
@@ -220,7 +234,18 @@ let backtranslate_exp_string_eq_superset (#g:typ_env) (#e1 #e2:exp)
     (requires backtranslate_exp h1 ⊒ e1 /\ backtranslate_exp h2 ⊒ e2)
     (ensures backtranslate_exp (TyStringEq h1 h2) ⊒ EStringEq e1 e2)
   =
-  C1.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+  C1.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) (backtranslate_exp h1) (backtranslate_exp h2) e1 e2;
+  backtranslate_exp_string_eq_eq h1 h2
+
+private
+let backtranslate_exp_string_eq_subset (#g:typ_env) (#e1 #e2:exp)
+  (h1:typing g e1 qString) (h2:typing g e2 qString)
+  : Lemma
+    (requires backtranslate_exp h1 ⊑ e1 /\ backtranslate_exp h2 ⊑ e2)
+    (ensures backtranslate_exp (TyStringEq h1 h2) ⊑ EStringEq e1 e2)
+  =
+  C2.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) (backtranslate_exp h1) (backtranslate_exp h2) e1 e2;
+  backtranslate_exp_string_eq_eq h1 h2
 #pop-options
 
 #push-options "--z3rlimit 64 --split_queries always"
@@ -392,13 +417,9 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
     let h1 : typing g e1 qString = h1 in
     let h2 : typing g e2 qString = h2 in
-    let fs_e1 : fs_ocomp g qString (fun _ -> True) = backtranslate_exp h1 in
-    let fs_e2 : fs_ocomp g qString (fun _ -> True) = backtranslate_exp h2 in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    assert (fs_e1 ⊑ e1);
-    assert (fs_e2 ⊑ e2);
-    C2.compat_ocomp_string_eq #g #(fun _ -> True) #(fun _ -> True) fs_e1 fs_e2 e1 e2
+    backtranslate_exp_string_eq_subset h1 h2
   | EZero -> C2.compat_ocomp_zero g
   | ESucc e' ->
     let TySucc h' = h in
@@ -454,6 +475,18 @@ let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
     let TySucc h' = h in
     1 + backtranslate h'
 
+#push-options "--z3rlimit 64 --fuel 2 --ifuel 2 --split_queries always"
+private
+let backtranslate_lam_eq (#t1 #t2:qType) (#body:exp{is_value (ELam body)})
+  (hbody:typing (extend t1 empty) body t2)
+  : Lemma (backtranslate #(ELam body) (TyLam hbody) ==
+           fs_oval_lambda_ocomp #empty #t1 #t2 (backtranslate_exp hbody) empty_eval)
+  = assert (backtranslate #(ELam body) (TyLam hbody) ==
+            fs_oval_lambda_ocomp #empty #t1 #t2 (backtranslate_exp hbody) empty_eval)
+      by (FStar.Tactics.norm [delta_only [`%backtranslate]; zeta; iota]; trefl ())
+#pop-options
+
+#push-options "--z3rlimit 64 --fuel 2 --ifuel 2 --split_queries always"
 let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Lemma (valid_contains #t (backtranslate h) e) =
   match e with
   | EUnit
@@ -467,7 +500,8 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
     C1.compat_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) body;
     let f' = fs_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) in
     lem_value_superset_valid_contains (t1 ^->!@ t2) f' e;
-    assert (valid_contains #(t1 ^->!@ t2) (f' empty_eval) e)
+    assert (valid_contains #(t1 ^->!@ t2) (f' empty_eval) e);
+    backtranslate_lam_eq #t1 #t2 #body hbody
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
     lem_backtranslate_valid_contains h1;
@@ -482,7 +516,9 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
   | ESucc _ ->
     let TySucc h' = h in
     lem_backtranslate_valid_contains h'
+#pop-options
 
+#push-options "--z3rlimit 64 --fuel 2 --ifuel 2 --split_queries always"
 let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : Lemma (valid_member_of #t (backtranslate h) e) =
   match e with
   | EUnit
@@ -496,7 +532,8 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
     C2.compat_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) body;
     let f' = fs_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) in
     lem_value_subset_valid_member_of (t1 ^->!@ t2) f' e;
-    assert (valid_member_of #(t1 ^->!@ t2) (f' empty_eval) e)
+    assert (valid_member_of #(t1 ^->!@ t2) (f' empty_eval) e);
+    backtranslate_lam_eq #t1 #t2 #body hbody
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
     lem_backtranslate_valid_member_of h1;
@@ -511,6 +548,7 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
   | ESucc _ ->
     let TySucc h' = h in
     lem_backtranslate_valid_member_of h'
+#pop-options
 
 val lem_backtranslate (#e:value) #t (h:typing empty e t)
   : Lemma (
