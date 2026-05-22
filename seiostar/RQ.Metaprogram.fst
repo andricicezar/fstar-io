@@ -9,6 +9,7 @@ open FStar.Stubs.Reflection.V2.Builtins
 open FStar.Stubs.Reflection.V2.Data
 
 open RQ.TypingRelation
+open RQ.SigeltAttrs
 open QTypes.HelperTactics
 
 let print_debug (s:string) : Tac unit =
@@ -582,6 +583,28 @@ let create_and_type_check_derivation (nm:string) g (dbmap:db_mapping) (prior_der
   let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation nm g qderivation desired_qtyp unfold_names
 
+(** Lemma postulated in [RQ.SigeltAttrs.fsti]: [set_sigelt_attrs] and
+    [set_sigelt_quals] only modify metadata fields that are NOT exposed by
+    [inspect_sigelt] (per FStar.Stubs.Reflection.V2.Builtins: [sigelt_view]
+    carries neither attrs nor qualifiers), so they preserve [sigelt_typing]
+    and [sigelt_has_type], which are defined purely via [pack_sigelt] /
+    [inspect_sigelt]. F*'s stdlib does not expose this axiom; we postulate
+    it locally in [RQ.SigeltAttrs.fsti]. **)
+
+(** Like [mk_checked_let] but attaches [opaque_to_smt] attribute and
+    [Irreducible] qualifier, so F* skips both re-typechecking (checked=true)
+    and SMT-encoding of the body. **)
+let mk_checked_opaque_let
+  (g:FStar.Stubs.Reflection.Types.env) (cur_module:name) (nm:string)
+  (tm:term) (ty:typ{FStar.Reflection.Typing.typing g tm (E_Total, ty)})
+  : sigelt_for g (Some ty) =
+  let (b, se, blob) = mk_checked_let g cur_module nm tm ty in
+  let attrs = [(`("opaque_to_smt"))] in
+  let quals = [Irreducible] in
+  let se' = set_sigelt_quals quals (set_sigelt_attrs attrs se) in
+  sigelt_typing_preserves g se (Some ty) attrs quals;
+  (b, se', blob)
+
 let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   set_guard_policy Force;
   match expected_t with
@@ -592,13 +615,12 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping [] qprog in
     let t1 = curms () in
     print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
-    let (b, se, blob) = mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation in
-    let se = set_sigelt_quals [Irreducible] se in
-    let se = set_sigelt_attrs [(`("opaque_to_smt"))] se in
-    ([], (b, se, blob), [])
+    let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
+    ([], se_for, [])
   end
 
 (** Generate a derivation for a program, reusing already-generated derivations.
+
     `deps` is a list of (source_program, derivation) pairs where:
     - source_program is a quoted fvar of the original F* function (e.g. `validate)
     - derivation is a quoted fvar of its already-generated derivation (e.g. `validate_derivation)
@@ -633,8 +655,6 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping prior_derivs qprog in
     let t1 = curms () in
     print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
-    let (b, se, blob) = mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation in
-    let se = set_sigelt_quals [Irreducible] se in
-    let se = set_sigelt_attrs [(`("opaque_to_smt"))] se in
-    ([], (b, se, blob), [])
+    let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
+    ([], se_for, [])
   end
