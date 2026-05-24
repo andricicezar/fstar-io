@@ -1013,7 +1013,6 @@ let can_step_ecall_when_reduced (op:io_ops) (arg:closed_exp) (h:history) : Lemma
   =
   introduce indexed_irred arg h ==> (exists e' oev. step (ECall op arg) e' h oev)  with _. begin
     assert (steps arg arg h []);
-    //assert (sem_value_shape (typ_io_arg op) arg);
     lem_q_io_args op;
     let args = destruct_e_io_args op arg in
     let res = default_io_res h op args in
@@ -1110,6 +1109,71 @@ let destruct_steps_ecall
         lem_value_is_irred val_arg;
         false_elim ()
       end
+#pop-options
+
+let can_step_enrec_when_reduced (e1 eb ef:closed_exp) (h:history) : Lemma
+  (requires indexed_sem_expr_shape TNat e1 h /\ indexed_safe e1 h)
+  (ensures exists e' oev. step (ENRec e1 eb ef) e' h oev)
+  =
+  introduce indexed_irred e1 h ==> (exists e' oev. step (ENRec e1 eb ef) e' h oev) with _. begin
+    assert (steps e1 e1 h []);
+    match e1 with
+    | EZero -> let _ : step (ENRec EZero eb ef) eb h None = SNRec0  eb ef h in ()
+    | ESucc n' -> let _ : step (ENRec (ESucc n') eb ef) (ENRec n' (EApp ef eb) ef) h None = SNRecIter n' eb ef h in ()
+  end;
+
+  introduce ~(indexed_irred e1 h) ==> (exists e' oev. step (ENRec e1 eb ef) e' h oev) with _. begin
+    assert (exists e1' oev'. step e1 e1' h oev');
+    eliminate exists e1' oev'. step e1 e1' h oev' returns exists e' oev. step (ENRec e1 eb ef) e' h oev with st. begin
+      FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SNRecV eb ef st))
+    end
+  end
+
+#push-options "--split_queries always"
+let rec destruct_steps_enrec_arg
+  (en eb ef e':closed_exp) (h:history) (lt:local_trace h)
+  (st:steps (ENRec en eb ef) e' h lt)
+  : Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
+    (requires indexed_irred e' (h++lt) /\
+      indexed_sem_expr_shape TNat en h /\
+      indexed_safe en h)
+    (ensures fun (en', (| lt1, lt' |)) ->
+      steps en en' h lt1 /\
+      steps (ENRec en eb ef) (ENRec en' eb ef) h lt1 /\
+      steps (ENRec en' eb ef) e' (h++lt1) lt' /\
+      (lt == lt1 @ lt') /\
+      (indexed_irred en h ==> en == en' /\ lt1 == []))
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> begin
+    can_step_enrec_when_reduced en eb ef h;
+    false_elim ()
+    end
+  | STrans #_ #mid #_ #_ #oev #lt23 step1 rest -> begin
+    match step1 with
+    | SNRecV #e1 #e1' e2 e3 #h #oev1 step_e1 -> begin
+      let lt0 : local_trace h = as_lt oev1 in
+      lem_step_implies_steps e1 e1' h oev1;
+      lem_step_implies_steps (ENRec e1 eb ef) (ENRec e1' eb ef) h oev1;
+      lem_step_preserve_indexed_safe e1 e1' h oev1;
+      lem_step_preserve_indexed_sem_expr_shape e1 e1' h oev1 TNat;
+      let s2 : steps (ENRec e1' eb ef) e' (h++lt0) lt23 = rest in
+      trans_history h lt0 lt23;
+      let (e1'', (| lt1, lt' |)) = destruct_steps_enrec_arg e1' eb ef e' (h++lt0) lt23 s2 in
+      trans_history h lt0 lt1;
+      lem_steps_transitive e1 e1' e1'' h lt0 lt1;
+      lem_steps_transitive (ENRec e1 eb ef) (ENRec e1' eb ef) (ENRec e1'' eb ef) h lt0 lt1;
+      (e1'', (| (lt0 @ lt1), lt' |))
+      end
+    | SNRec0 e2 e3 h -> begin
+      lem_value_is_irred en;
+      (en, (| [], lt |))
+      end
+    | SNRecIter v e2 e3 h -> begin
+      lem_value_is_irred en;
+      (en, (| [], lt |))
+      end
+    end
 #pop-options
 
 let srefl_esucc_implies_value (e12:closed_exp) (h:history) : Lemma
