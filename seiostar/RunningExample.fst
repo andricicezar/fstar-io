@@ -714,25 +714,15 @@ let main agent =
   | Inl _ -> return true
   | Inr _ -> return false
 
-// %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
-// %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
-
-// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
-
-%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-
-[@@ (preprocess_with simplify_qType)]
-let main_derivation () : ((qString ^-> qString ^->!@ qUnit) ^->!@ qBool) ⊩ main
-  by (RQ.TypingRelation.Tests.simplify_via_norm ())
-  = pack_turnstile (QLambdaIO (
-      QBind
-        (QAppIO
-          (QApp (QApp (dsnd (wrapper_derivation _)) (QStringLit "./temp"))
-                (QStringLit "overwrite\n"))
-          QAxiom)
-        (QCaseIO QAxiom
-          (QReturn QTrue)
-          (QReturn QFalse))))
+%splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
+%splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
+%splice_t[wrapper_derivation] (generate_derivation_using "wrapper_derivation" (`wrapper) [
+  (`%validate, `validate_derivation);
+  (`%read_file, `read_file_derivation);
+])
+%splice_t[main_derivation] (generate_derivation_using "main_derivation" (`main) [
+  (`%wrapper, `wrapper_derivation)
+])
 
 let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
@@ -744,7 +734,8 @@ let main' () : fs_val (re_int.ct ^->!@ qBool) by (compute ()) =
 
 val ps_main : progS re_int
 let ps_main : progS re_int =
-  (| main' (), (| main_derivation empty, (_ by (norm [delta; iota])) |) |)
+  let qs : (re_int.ct ^->!@ qBool) ⊫ (main' ()) = (| main_derivation empty, (_ by (norm [delta_only [`%main_derivation;`%pack_turnstile_g]]; norm [delta; iota])) |) in
+  (| _, qs |)
 
 let pt_main = RrHP.compile_prog ps_main
 

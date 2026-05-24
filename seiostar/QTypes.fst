@@ -165,6 +165,18 @@ unfold
 let ref_type (t:qType) : Type0 =
   ref_type' (get_rel t)
 
+let ref_of (a:qType) : ref_type a -> Type0 =
+  match get_rel a with
+  | QUnit #ref -> ref
+  | QBool #ref -> ref
+  | QFileDescriptor #ref -> ref
+  | QString #ref -> ref
+  | QPair _ _ #ref -> ref
+  | QSum _ _ #ref -> ref
+  | QNat -> (fun _ -> True)
+  | QArr _ _ -> (fun _ -> True)
+  | QArrIO _ _ -> (fun _ -> True)
+
 let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
   match get_rel t with
   | QUnit -> qUnitR ref
