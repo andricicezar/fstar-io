@@ -1071,6 +1071,7 @@ let rec destruct_steps_ecall_arg
       lem_value_is_irred (as_e_io_args op args);
       (arg, (| [], lt |))
     end
+#pop-options
 
 #push-options "--z3rlimit 10"
 let destruct_steps_ecall
@@ -1340,3 +1341,4 @@ let rec destruct_steps_enrec_nat
       lem_steps_refl (ESucc v) h;
       lem_steps_refl (ENRec (ESucc v) eb ef) h;
       (ESucc v, (| [], lt |))
+#pop-options
