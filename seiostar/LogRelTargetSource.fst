@@ -399,20 +399,54 @@ let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp
   =
   lem_unfold_in_io_arrow_to_body_direct t1 t2 h fs_e1 e11
 
-(** Unused
-let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
-  Lemma (requires equiv_val fs_e e)
-        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) = ()
-**)
+let rec sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma (requires t ∋ (h, fs_e, e))
+        (ensures sem_value_shape (type_quotation_to_typ (get_rel t)) e)
+        (decreases get_rel t) =
+  lem_values_are_values t h fs_e e;
+  match (type_quotation_to_typ (get_rel t)) with
+  | TUnit
+  | TBool
+  | TFileDescr
+  | TString
+  | TNat
+  | TArr _ _ -> ()
+  | TPair ty1 ty2 -> begin
+    let QPair #t1 #t2 qt1 qt2 = get_rel t in
+    let EPair e1 e2 = e in
+    sem_expr_shape_val #(QTypes.pack qt1) (fst #t1 #t2 fs_e) e1 h;
+    sem_expr_shape_val #(QTypes.pack qt2) (snd #t1 #t2 fs_e) e2 h
+    end
+  | TSum ty1 ty2 -> begin
+    let QSum #t1 #t2 qt1 qt2 = get_rel t in
+    let fs_e : either t1 t2 = fs_e in
+    match fs_e, e with
+    | Inl fs_e', EInl e' -> sem_expr_shape_val #(QTypes.pack qt1) fs_e' e' h
+    | Inr fs_e', EInr e' -> sem_expr_shape_val #(QTypes.pack qt2) fs_e' e' h
+    | _ -> false_elim ()
+    end
+
+let sem_expr_shape_expr (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma (requires t ⊇ (h, fs_e, e))
+        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h)
+        (decreases get_rel t) =
+  introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
+    introduce _ ==> _ with _. begin
+      indexed_safety_val fs_e e h;
+      assert (t ∋ (h, fs_e, e'));
+      sem_expr_shape_val fs_e e' h
+    end
+  end
+
 let sem_expr_shape_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) :
   Lemma (requires t ⫄ (h, fs_e, e))
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
   introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
-    introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      assert (t ⫄ (h, fs_e, e));
+    introduce _ ==> _ with _. begin
+      indexed_safety_comp fs_e e h;
       eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
-      returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      lem_values_are_values t (h++lt) fs_r e'
+        returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+        sem_expr_shape_val #t fs_r e' (h++lt)
       end
     end
   end
