@@ -734,8 +734,12 @@ let main' () : fs_val (re_int.ct ^->!@ qBool) by (compute ()) =
 
 val ps_main : progS re_int
 let ps_main : progS re_int =
-  let qs : (re_int.ct ^->!@ qBool) ⊫ (main' ()) = (| main_derivation empty, (_ by (norm [delta_only [`%main_derivation;`%pack_turnstile_g]]; norm [delta; iota])) |) in
-  (| _, qs |)
+  let qs : (re_int.ct ^->!@ qBool) ⊫ (main' ()) = (| main_derivation empty, (_ by (norm [delta; iota])) |) in
+  let ps : progS_raw re_int = (| _, qs |) in
+  assert (Compilation.is_lambda_io ps._2._1._2) by (
+    norm [delta_only [`%main_derivation;`%pack_turnstile_g;`%Mkdtuple2?._1;`%Mkdtuple2?._2; `%Compilation.is_lambda_io]; zeta; iota]);
+  ps
+
 
 let pt_main = RrHP.compile_prog ps_main
 

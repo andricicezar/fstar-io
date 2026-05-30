@@ -545,26 +545,36 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
 let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
   print_debug ("DEBUG: entering type_check_derivation");
+  let t0 = curms () in
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) false in
-  print_debug ("DEBUG: done instantiating implicits");
+  let t1 = curms () in
+  print ("  done instantiating implicits " ^ string_of_int (t1 - t0) ^ " ms");
+  let t0 = t1 in
   // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let qderivation = fill_trivial_refinements l qderivation in
-  print_debug ("DEBUG: done filling refinements");
+  let t1 = curms () in
+  print ("  done filling refinements " ^ string_of_int (t1 - t0) ^ " ms");
+  let t0 = t1 in
 
   let qderivation = norm_well_typed_term g [delta_only qType_defs_list; primops; iota; simplify] qderivation in
-  print_debug ("DEBUG: done normalizing derivation");
+  let t1 = curms () in
+  print ("  done normalizing derivation " ^ string_of_int (t1 - t0) ^ " ms");
+  let t0 = t1 in
 
   // print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
   let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; iota] desired_qtyp in
   print_debug ("DEBUG: before core_check_term");
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
-  print_debug ("DEBUG: core_checm_term successfull, "^ string_of_int (ngoals ()) ^" goals to prove");
+  let t1 = curms () in
+  print ("  done core_check_term " ^ string_of_int (t1 - t0) ^ " ms");
+  let t0 = t1 in
 
   (match ngoals () with
   | 0 -> ()
   | 1 ->  with_compat_pre_core 0 (fun () -> prove_equality nm unfold_names)
   | _ -> fail "too many goals");
-  print_debug ("DEBUG: proved equality!");
+  let t1 = curms () in
+  print ("  done proving equality " ^ string_of_int (t1 - t0) ^ " ms");
   set_guard_policy Force;
   lem_retype_token g qderivation desired_qtyp' desired_qtyp;
   token_as_typing g qderivation E_Total desired_qtyp;
