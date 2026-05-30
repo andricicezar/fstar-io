@@ -249,6 +249,7 @@ let helper_compat_prod_case_val
   bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) (fun sts ->
     let a_typ = type_quotation_to_typ (get_rel a) in
     let b_typ = type_quotation_to_typ (get_rel b) in
+    sem_expr_shape_expr #(a ^+ b) fs_sc e_sc h;
     let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_li e_ri e' h lt sts a_typ b_typ in
     assert ((a ^+ b) ∋ (h, fs_sc, e_sc'));
     lem_value_is_irred (ELam e_li);
@@ -342,7 +343,6 @@ let helper_compat_weaken_novar
   shift_sub_equiv_sub_inc_no_rename #t #g s' e f
 #pop-options
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
   : Lemma
@@ -357,8 +357,8 @@ let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
       else helper_compat_weaken_novar s e s' fsG h
     end
   end
-#pop-options
 
+#push-options "--split_queries always"
 let compat_oval_lambda #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2 preBody) (body:exp) : Lemma
   (requires fs_body ⊐ body)
   (ensures (fs_oval_lambda fs_body ⊐ ELam body)) =
@@ -395,6 +395,7 @@ let compat_oval_lambda #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qTy
       assert ((t1 ^-> t2) ⊇ (h, f fsG, gsubst s (ELam body)))
     end
   end
+#pop-options
 
 let helper_compat_oval_app (e':closed_exp) (h:history) (lt:local_trace h) (t1 t2:qType) (fs_e1:fs_val (t1 ^-> t2)) (fs_e2:fs_val t1) (e1 e2:closed_exp) :
   Lemma
@@ -554,6 +555,7 @@ let helper_compat_oval_pair_fst
   bind_squash (steps (EFst e12) e' h lt) (fun steps_e_e' ->
     let t1_typ = type_quotation_to_typ (get_rel t1) in
     let t2_typ = type_quotation_to_typ (get_rel t2) in
+    sem_expr_shape_expr #(t1 ^* t2) fs_e12 e12 h;
     let (e12', (| lt12, lt_f |)) = destruct_steps_epair_fst e12 e' h lt steps_e_e' t1_typ t2_typ in
     lem_value_is_irred e12';
     assert ((t1 ^* t2) ⊇ (h, fs_e12, e12));
@@ -600,6 +602,7 @@ let helper_compat_oval_pair_snd (e':closed_exp) (h:history) (lt:local_trace h) (
   bind_squash (steps (ESnd e12) e' h lt) (fun steps_e_e' ->
     let t1_typ = type_quotation_to_typ (get_rel t1) in
     let t2_typ = type_quotation_to_typ (get_rel t2) in
+    sem_expr_shape_expr #(t1 ^* t2) fs_e12 e12 h;
     let (e12', (| lt12, lt_f |)) = destruct_steps_epair_snd e12 e' h lt steps_e_e' t1_typ t2_typ in
     lem_value_is_irred e12';
     assert ((t1 ^* t2) ⊇ (h, fs_e12, e12));
@@ -733,6 +736,7 @@ let helper_compat_val_case (e':closed_exp)
   bind_squash (steps (ECase e_case e_lc e_rc) e' h lt) (fun sts ->
     let t1_typ = type_quotation_to_typ (get_rel t1) in
     let t2_typ = type_quotation_to_typ (get_rel t2) in
+    sem_expr_shape_expr #(t1 ^+ t2) fs_case e_case h;
     let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts t1_typ t2_typ in
     eliminate forall e_sc'' lt'. e_beh e_case e_sc'' h lt' ==> ((t1 ^+ t2) ∋ (h, fs_case, e_sc'') /\ lt' == []) with e_sc' lt1;
     let res   = match e_sc' with | EInl _ -> e_lc | EInr _ -> e_rc in
@@ -960,7 +964,7 @@ let compat_ocomp_return #g (#t:qType) #pre (fs_x:fs_oval g t pre) (x:exp)
     end
   end
 
-#push-options "--z3rlimit 10 --fuel 4 --ifuel 2"
+#push-options "--z3rlimit 10 --fuel 4 --ifuel 2 --split_queries always"
 let helper_compat_ocomp_bind (e':closed_exp) (#h:history) (lt:local_trace h) (#a:qType) (#b:qType) (fs_k':fs_val a -> fs_comp b) (fs_m:fs_comp a) (m k':exp) :
 Lemma
   (requires is_closed (EApp (ELam k') m) /\
@@ -1137,6 +1141,7 @@ let helper_compat_ocomp_case_val
   bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) #(exists (fs_r':fs_val c). c ∋ (h++lt, fs_r', e') /\ fs_beh fs_r h lt fs_r') (fun sts ->
     let a_typ = type_quotation_to_typ (get_rel a) in
     let b_typ = type_quotation_to_typ (get_rel b) in
+    sem_expr_shape_expr #(a ^+ b) fs_sc e_sc h;
     let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_li e_ri e' h lt sts a_typ b_typ in
     eliminate forall e_sc'' lt'. e_beh e_sc e_sc'' h lt' ==> ((a ^+ b) ∋ (h, fs_sc, e_sc'') /\ lt' == []) with e_sc' lt1;
     let res = match e_sc' with | EInl x -> x | EInr x -> x in
@@ -1317,135 +1322,8 @@ let compat_ocomp_case_oval
   end
 #pop-options
 
-(* General helper for all ops - no case analysis on op *)
-#push-options "--fuel 4 --z3rlimit 20"
-let rec destruct_steps_ecall_arg_all
-  (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
-  (fs_arg:fs_val (q_io_args op))
-  (st:steps (ECall op arg) e' h lt) :
-  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
-    (requires indexed_irred e' (h++lt) /\
-      (q_io_args op) ⊇ (h, fs_arg, arg))
-    (ensures fun (val_arg, (| lt1, lt' |)) ->
-      (q_io_args op) ∋ (h, fs_arg, val_arg) /\
-      val_arg == as_e_io_args op (cast_io_args op fs_arg) /\
-      steps arg val_arg h lt1 /\
-      steps (ECall op arg) (ECall op val_arg) h lt1 /\
-      steps (ECall op val_arg) e' (h++lt1) lt' /\
-      (lt == (lt1 @ lt')))
-    (decreases st) =
-  match st with
-  | SRefl _ h -> begin
-    (* ECall op arg is irreducible, but it can always step — contradiction.
-       First derive indexed_irred arg h from indexed_irred (ECall op arg) h. *)
-    introduce forall (arg':closed_exp) (oev:option (event_h h)). step arg arg' h oev ==> False with begin
-      introduce _ ==> _ with st. begin
-        FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SCall #arg #arg' #h #oev #op st))
-      end
-    end;
-    assert (e_beh arg arg h []);
-    assert ((q_io_args op) ∋ (h, fs_arg, arg));
-    lem_q_io_args op;
-    assert (arg == as_e_io_args op (cast_io_args op fs_arg));
-    can_step_ecall_val op arg h;
-    false_elim ()
-    end
-  | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin
-    let (ECall _ arg) = e in
-    match step_ecall with
-    | SCall #arg #arg' #h' #oev #_ step_arg -> begin
-      let (ECall _ arg') = f2 in
-      lem_step_implies_steps arg arg' h oev;
-      lem_step_implies_steps (ECall op arg) (ECall op arg') h oev;
-      let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (ECall op arg') e' (h++lt1) lt23 = step_ecall_steps in
-      trans_history h lt1 lt23;
-      lem_superset_preserved_by_step (q_io_args op) h fs_arg arg arg' oev;
-      let (val_arg, (| lt1', lt' |)) = destruct_steps_ecall_arg_all op arg' e' (h++lt1) lt23 fs_arg s2 in
-      trans_history h lt1 lt1';
-      lem_steps_transitive arg arg' val_arg h lt1 lt1';
-      lem_steps_transitive (ECall op arg) (ECall op arg') (ECall op val_arg) h lt1 lt1';
-      assert ((q_io_args op) ∋ (h++lt1, fs_arg, val_arg));
-      (* from ⊇ preservation, the trace from arg to val_arg is empty *)
-      lem_value_is_irred val_arg;
-      assert (e_beh arg val_arg h (lt1 @ lt1'));
-      assert ((lt1 @ lt1') == []);
-      (val_arg, (| (lt1 @ lt1'), lt' |))
-      end
-    | SCallReturn _ _ args _ -> begin
-      (* arg is already as_e_io_args form, which is a value *)
-      lem_value_is_irred (as_e_io_args op args);
-      assert (e_beh arg arg h []);
-      assert ((q_io_args op) ∋ (h, fs_arg, arg));
-      assert (arg == as_e_io_args op (cast_io_args op fs_arg));
-      (arg, (| [], lt |))
-      end
-    end
-#pop-options
-
-(* General step decomposition for all ops using ⫄ threading.
-   Unlike destruct_steps_ecall_arg_all (which uses ⊇), this threads the original
-   ⫄ computation relation and accumulated steps through the recursion.
-   This avoids needing indexed_sem_expr_shape, which doesn't exist for OWrite. *)
-#push-options "--fuel 4 --z3rlimit 40"
-let rec destruct_steps_ecall_arg_comp
-  (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
-  (st:steps (ECall op arg) e' h lt)
-  (arg0:closed_exp) (h0:history) (lt_acc:local_trace h0) (fs_arg0:fs_comp (q_io_args op))
-  : Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
-    (requires indexed_irred e' (h++lt) /\
-      h == h0 ++ lt_acc /\
-      (q_io_args op) ⫄ (h0, fs_arg0, arg0) /\
-      squash (steps arg0 arg h0 lt_acc))
-    (ensures fun (val_arg, (| lt1, lt' |)) ->
-      indexed_irred val_arg (h++lt1) /\
-      steps arg val_arg h lt1 /\
-      steps (ECall op arg) (ECall op val_arg) h lt1 /\
-      steps (ECall op val_arg) e' (h++lt1) lt' /\
-      (lt == (lt1 @ lt')))
-    (decreases st) =
-  match st with
-  | SRefl _ h -> begin
-    (* ECall op arg is irreducible → derive indexed_irred arg h *)
-    introduce forall (arg':closed_exp) (oev:option (event_h h)). step arg arg' h oev ==> False with begin
-      introduce _ ==> _ with st. begin
-        FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SCall #arg #arg' #h #oev #op st))
-      end
-    end;
-    assert (e_beh arg0 arg h0 lt_acc);
-    (* From ⫄ + e_beh, derive that arg has the as_e_io_args form *)
-    lem_q_io_args op;
-    can_step_ecall_val op arg h;
-    false_elim ()
-    end
-  | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin
-    let (ECall _ arg) = e in
-    match step_ecall with
-    | SCall #arg #arg' #h' #oev #_ step_arg -> begin
-      let (ECall _ arg') = f2 in
-      lem_step_implies_steps arg arg' h oev;
-      lem_step_implies_steps (ECall op arg) (ECall op arg') h oev;
-      let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (ECall op arg') e' (h++lt1) lt23 = step_ecall_steps in
-      trans_history h lt1 lt23;
-      lem_steps_transitive arg0 arg arg' h0 lt_acc lt1;
-      trans_history h0 lt_acc lt1;
-      let (val_arg, (| lt1', lt' |)) = destruct_steps_ecall_arg_comp op arg' e' (h++lt1) lt23 s2 arg0 h0 (lt_acc @ lt1) fs_arg0 in
-      trans_history h lt1 lt1';
-      lem_steps_transitive arg arg' val_arg h lt1 lt1';
-      lem_steps_transitive (ECall op arg) (ECall op arg') (ECall op val_arg) h lt1 lt1';
-      associative_history lt1 lt1' lt';
-      (val_arg, (| (lt1 @ lt1'), lt' |))
-      end
-    | SCallReturn _ _ args _ -> begin
-      lem_value_is_irred (as_e_io_args op args);
-      (arg, (| [], lt |))
-      end
-    end
-#pop-options
-
 (* General helper - works for all ops without case analysis on op *)
-#push-options "--fuel 4 --z3rlimit 20 --ifuel 1"
+#push-options "--fuel 4 --z3rlimit 64 --ifuel 1 --split_queries always"
 let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
@@ -1457,7 +1335,9 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
   bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
     lem_q_io_args op;
     lem_q_io_res op;
-    let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg_all op arg e' h lt fs_arg steps_e_e' in
+    let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt steps_e_e' in
+    lem_value_is_irred arg';
+    assert ((q_io_args op) ∋ (h, fs_arg, arg'));
     lem_value_is_closed arg';
     assert (is_closed (ECall op arg'));
     FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #(exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r) () (fun sts1 ->
@@ -2151,7 +2031,11 @@ let compat_ocomp_fst #g
         FStar.Tactics.smt ())
 
 #push-options "--ifuel 4 --fuel 4 --z3rlimit 20"
-let compat_ocomp_snd #g (#t1 #t2:qType) #preP (fs_e12:fs_ocomp g (t1 ^* t2) preP) (e12:exp)
+let compat_ocomp_snd #g
+  (#t1 #t2:qType)
+  #preP
+  (fs_e12:fs_ocomp g (t1 ^* t2) preP)
+  (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
     (ensures fs_ocomp_fmap fs_e12 snd ⊒ (ESnd e12)) =
@@ -2174,6 +2058,8 @@ let compat_ocomp_snd #g (#t1 #t2:qType) #preP (fs_e12:fs_ocomp g (t1 ^* t2) preP
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps e e' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod (t1 ^* t2) h;
+              assert ((t1 ^* t2) ⫄ (h, fs_e12' (), e12));
+              sem_expr_shape_comp (fs_e12' ()) e12 h;
               let t1_typ = type_quotation_to_typ (get_rel t1) in
               let t2_typ = type_quotation_to_typ (get_rel t2) in
               let (e12', (| lt12, lt_f |)) = destruct_steps_epair_snd e12 e' h lt sts1 t1_typ t2_typ in
@@ -2383,91 +2269,13 @@ let compat_oval_succ (#g:typ_env) (#preN:spec_env g) (n:fs_oval g qNat preN) (e:
     end
   end
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
-private let rec destruct_steps_enrec_qnat
-  (k:nat) (e1 eb ef e':closed_exp) (h:history) (lt:local_trace h)
-  (st:steps (ENRec e1 eb ef) e' h lt)
-  : Pure (lt1:local_trace h & local_trace (h++lt1))
-    (requires indexed_irred e' (h++lt) /\ qNat ⊇ (h, k, e1))
-    (ensures fun (| lt1, lt2 |) ->
-      steps e1 (nat_to_exp k) h lt1 /\
-      steps (ENRec e1 eb ef) (ENRec (nat_to_exp k) eb ef) h lt1 /\
-      steps (ENRec (nat_to_exp k) eb ef) e' (h++lt1) lt2 /\
-      lt == lt1 @ lt2)
-    (decreases st) =
-  match st with
-  | SRefl _ _ -> begin
-    indexed_safety_val #qNat k e1 h;
-    introduce ~(indexed_irred e1 h) ==> False with _. begin
-      assert (exists e1' oev1. step e1 e1' h oev1);
-      eliminate exists e1' oev1. step e1 e1' h oev1 returns exists e'' oev. step (ENRec e1 eb ef) e'' h oev with step_e1. begin
-        FStar.Squash.bind_squash step_e1 (fun step_e1 -> FStar.Squash.return_squash (SNRecV eb ef step_e1))
-      end;
-      false_elim ()
-    end;
-    assert (e_beh e1 e1 h []);
-    eliminate forall (e1v:closed_exp) (lt1:local_trace h). e_beh e1 e1v h lt1 ==> (qNat ∋ (h, k, e1v) /\ lt1 == []) with e1 ([] <: local_trace h);
-    assert (qNat ∋ (h, k, e1));
-    assert (e1 == nat_to_exp k);
-    if k = 0 then begin
-      let _ : step (ENRec EZero eb ef) eb h None = SNRec0 eb ef h in
-      false_elim ()
-    end else begin
-      let k' = k - 1 in
-      lem_nat_to_exp_succ k';
-      assert (nat_to_exp k == ESucc (nat_to_exp k'));
-      let _ : step (ENRec (nat_to_exp k) eb ef) (ENRec (nat_to_exp k') (EApp ef eb) ef) h None =
-        SNRecIter (nat_to_exp k') eb ef h in
-      false_elim ()
-    end
-  end
-  | STrans #_ #mid #_ #_ #oev #lt23 step1 rest -> begin
-    match step1 with
-    | SNRecV #e1 #e1' e2 e3 #h #oev1 step_e1 -> begin
-      let lt0 : local_trace h = as_lt oev1 in
-      lem_step_implies_steps e1 e1' h oev1;
-      lem_step_implies_steps (ENRec e1 eb ef) (ENRec e1' eb ef) h oev1;
-      lem_superset_preserved_by_step qNat h k e1 e1' oev1;
-      let s2 : steps (ENRec e1' eb ef) e' (h++lt0) lt23 = rest in
-      trans_history h lt0 lt23;
-      let (| lt1, lt2 |) = destruct_steps_enrec_qnat k e1' eb ef e' (h++lt0) lt23 s2 in
-      trans_history h lt0 lt1;
-      lem_steps_transitive e1 e1' (nat_to_exp k) h lt0 lt1;
-      lem_steps_transitive (ENRec e1 eb ef) (ENRec e1' eb ef) (ENRec (nat_to_exp k) eb ef) h lt0 lt1;
-      (| (lt0 @ lt1), lt2 |)
-    end
-    | SNRec0 e2 e3 h -> begin
-      let EZero = e1 in
-      lem_value_is_irred EZero;
-      assert (e_beh e1 EZero h []);
-      eliminate forall (e1v:closed_exp) (lt1:local_trace h). e_beh e1 e1v h lt1 ==> (qNat ∋ (h, k, e1v) /\ lt1 == []) with EZero ([] <: local_trace h);
-      assert (qNat ∋ (h, k, EZero));
-      assert (nat_to_exp k == EZero);
-      lem_steps_refl EZero h;
-      lem_steps_refl (ENRec EZero eb ef) h;
-      (| [], lt |)
-    end
-    | SNRecIter v e2 e3 h -> begin
-      let ESucc v = e1 in
-      lem_value_is_irred (ESucc v);
-      assert (e_beh e1 (ESucc v) h []);
-      eliminate forall (e1v:closed_exp) (lt1:local_trace h). e_beh e1 e1v h lt1 ==> (qNat ∋ (h, k, e1v) /\ lt1 == []) with (ESucc v) ([] <: local_trace h);
-      assert (qNat ∋ (h, k, ESucc v));
-      assert (nat_to_exp k == ESucc v);
-      lem_steps_refl (ESucc v) h;
-      lem_steps_refl (ENRec (ESucc v) eb ef) h;
-      (| [], lt |)
-    end
-  end
-#pop-options
-
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
-private let rec helper_nrec_C0
-    (a:qType) (k:nat) (b0:fs_val a) (f0:fs_val (a ^-> a))
-    (eb_s ef_s e':closed_exp) (h:history) (lt:local_trace h) :
+let rec helper_nrec
+  (a:qType) (k:nat) (en_s:closed_exp{nat_to_exp k == en_s})
+  (b0:fs_val a) (f0:fs_val (a ^-> a))
+  (eb_s ef_s e':closed_exp) (h:history) (lt:local_trace h) :
   Lemma
     (requires
-      e_beh (ENRec (nat_to_exp k) eb_s ef_s) e' h lt /\
+      e_beh (ENRec en_s eb_s ef_s) e' h lt /\
       (forall (lta:local_trace h). a ⊇ (h++lta, b0, eb_s)) /\
       (forall (lta:local_trace h). (a ^-> a) ⊇ (h++lta, f0, ef_s)))
     (ensures a ∋ (h, fs_nrec_val #a k b0 f0, e') /\ lt == [])
@@ -2493,10 +2301,10 @@ private let rec helper_nrec_C0
         end
       end
     end;
-    helper_nrec_C0 a k' (f0 b0) f0 (EApp ef_s eb_s) ef_s e' h lt
+    helper_nrec a k' (nat_to_exp k') (f0 b0) f0 (EApp ef_s eb_s) ef_s e' h lt
   end
-#pop-options
 
+#push-options "--z3rlimit 20 --fuel 1 --ifuel 1 --split_queries always"
 let compat_oval_nrec (#g:typ_env) (#a:qType)
     (#preN:spec_env g) (n:fs_oval g qNat preN)
     (#preB:spec_env g) (base:fs_oval g a preB)
@@ -2505,49 +2313,41 @@ let compat_oval_nrec (#g:typ_env) (#a:qType)
   : Lemma (requires n ⊐ en /\ base ⊐ eb /\ f ⊐ ef)
           (ensures fs_oval_nrec n base f ⊐ ENRec en eb ef) =
   lem_fv_in_env_nrec g en eb ef;
-  introduce forall b (s:gsub g b) fsG h.
-    (fsG `(∽) h` s /\ (spec_env_app preN (spec_env_app preB preF)) fsG) ==> a ⊇ (h, fs_oval_nrec n base f fsG, gsubst s (ENRec en eb ef)) with begin
-    introduce _ ==> _ with _. begin
-      assert (preN fsG);
-      assert (preB fsG);
-      assert (preF fsG);
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> a ⊇ (h, fs_oval_nrec n base f fsG, gsubst s (ENRec en eb ef)) with begin
     let k : nat = n fsG in
     let b0 : fs_val a = base fsG in
     let f0 : fs_val (a ^-> a) = f fsG in
-    let en_s : closed_exp = gsubst s en in
-    let eb_s : closed_exp = gsubst s eb in
-    let ef_s : closed_exp = gsubst s ef in
+    let en_s = gsubst s en in
+    let eb_s = gsubst s eb in
+    let ef_s = gsubst s ef in
     assert (gsubst s (ENRec en eb ef) == ENRec en_s eb_s ef_s);
     introduce fsG `(∽) h` s ==> a ⊇ (h, fs_nrec_val #a k b0 f0, ENRec en_s eb_s ef_s) with _. begin
       lem_shift_type_value_environments h fsG s;
-      introduce forall (lta:local_trace h). a ⊇ (h++lta, b0, eb_s) with begin
-        ()
-      end;
-      introduce forall (lta:local_trace h). (a ^-> a) ⊇ (h++lta, f0, ef_s) with begin
-        ()
-      end;
+      assert (forall (lta:local_trace h). a ⊇ (h++lta, b0, eb_s));
+      assert (forall (lta:local_trace h). (a ^-> a) ⊇ (h++lta, f0, ef_s));
       introduce forall (e':closed_exp) (lt:local_trace h). e_beh (ENRec en_s eb_s ef_s) e' h lt ==> (a ∋ (h, fs_nrec_val #a k b0 f0, e') /\ lt == []) with begin
-        introduce _ ==> _ with _. begin
+        introduce e_beh (ENRec en_s eb_s ef_s) e' h lt ==> _ with _. begin
           assert (qNat ⊇ (h, k, en_s));
           FStar.Squash.bind_squash #(steps (ENRec en_s eb_s ef_s) e' h lt) () (fun sts ->
-            let (| lt1, lt2 |) = destruct_steps_enrec_qnat k en_s eb_s ef_s e' h lt sts in
-            lem_nat_to_exp_is_value k;
-            lem_value_is_irred (nat_to_exp k);
-            assert (e_beh en_s (nat_to_exp k) h lt1);
-            assert (qNat ∋ (h, k, nat_to_exp k) /\ lt1 == []);
-            trans_history h lt1 lt2;
-            helper_nrec_C0 a k b0 f0 eb_s ef_s e' h lt2)
+            indexed_safety_val #qNat k en_s h;
+            sem_expr_shape_expr #qNat k en_s h;
+            let (en_s', (| lt1, lt' |)) = destruct_steps_enrec_arg en_s eb_s ef_s e' h lt sts in
+            lem_value_is_irred en_s';
+            assert (qNat ∋ (h, k, en_s') /\ lt1 == []);
+            assert (nat_to_exp k == en_s');
+            trans_history h lt1 lt';
+            helper_nrec a k en_s' b0 f0 eb_s ef_s e' h lt)
         end
       end
     end
-    end
   end
+#pop-options
 
 let compat_ocomp_zero g : Lemma (fs_ocomp_return_val g qNat 0 ⊒ EZero) =
   compat_oval_zero g;
   compat_ocomp_return (fs_oval_zero g) EZero
 
-#push-options "--z3rlimit 20 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 20 --fuel 1 --ifuel 1 --split_queries always"
 let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN) (e:exp)
   : Lemma (requires fs_n ⊒ e)
           (ensures (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) ⊒ ESucc e) =
@@ -2596,55 +2396,6 @@ let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN
     end
   end
 #pop-options
-
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
-private let rec destruct_steps_enrec_nat
-  (e1 eb ef e':closed_exp) (h:history) (lt:local_trace h)
-  (st:steps (ENRec e1 eb ef) e' h lt) :
-  Pure (closed_exp * (lt1:local_trace h & local_trace (h++lt1)))
-    (requires indexed_irred e' (h++lt) /\ indexed_sem_expr_shape TNat e1 h)
-    (ensures fun (e1v, (| lt1, lt2 |)) ->
-      indexed_irred e1v (h++lt1) /\
-      sem_value_shape TNat e1v /\
-      steps e1 e1v h lt1 /\
-      steps (ENRec e1 eb ef) (ENRec e1v eb ef) h lt1 /\
-      steps (ENRec e1v eb ef) e' (h++lt1) lt2 /\
-      lt == lt1 @ lt2 /\
-      (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1v)))
-    (decreases st) =
-  match st with
-  | SRefl _ _ ->
-    lem_irred_enrec_implies_irred_e1 e1 eb ef h;
-    assert (steps e1 e1 h []);
-    assert (sem_value_shape TNat e1);
-    lem_steps_refl (ENRec e1 eb ef) h;
-    (e1, (| [], lt |))
-  | STrans #_ #mid #_ #_ #oev #lt23 step1 rest ->
-    match step1 with
-    | SNRecV #e1 #e1' e2 e3 #h #oev1 step_e1 ->
-      let lt0 : local_trace h = as_lt oev1 in
-      lem_step_implies_steps e1 e1' h oev1;
-      lem_step_implies_steps (ENRec e1 eb ef) (ENRec e1' eb ef) h oev1;
-      lem_step_preserve_indexed_sem_expr_shape e1 e1' h oev1 TNat;
-      let s2 : steps (ENRec e1' eb ef) e' (h++lt0) lt23 = rest in
-      trans_history h lt0 lt23;
-      let (e1v, (| lt1, lt2 |)) = destruct_steps_enrec_nat e1' eb ef e' (h++lt0) lt23 s2 in
-      trans_history h lt0 lt1;
-      lem_steps_transitive e1 e1' e1v h lt0 lt1;
-      lem_steps_transitive (ENRec e1 eb ef) (ENRec e1' eb ef) (ENRec e1v eb ef) h lt0 lt1;
-      (e1v, (| lt0 @ lt1, lt2 |))
-    | SNRec0 e2 e3 h ->
-      let EZero = e1 in
-      lem_value_is_irred EZero;
-      lem_steps_refl EZero h;
-      lem_steps_refl (ENRec EZero eb ef) h;
-      (EZero, (| [], lt |))
-    | SNRecIter v e2 e3 h ->
-      let ESucc v = e1 in
-      lem_value_is_irred (ESucc v);
-      lem_steps_refl (ESucc v) h;
-      lem_steps_refl (ENRec (ESucc v) eb ef) h;
-      (ESucc v, (| [], lt |))
 
 private let helper_compat_ocomp_app_closed (e':closed_exp) (h:history) (lt:local_trace h) (a b:qType)
   (fs_f':fs_comp (a ^->!@ b)) (fs_x':fs_comp a) (f x:closed_exp) :
@@ -2722,7 +2473,6 @@ private let rec helper_compat_ocomp_nrec_steps
     end;
     helper_compat_ocomp_nrec_steps a k' fb' ff (EApp ef_s eb_s) ef_s e' h lt
   end
-#pop-options
 
 let compat_ocomp_nrec (#g:typ_env) (#a:qType)
     (#preN:spec_env g) (fn:fs_ocomp g qNat preN)
@@ -2809,6 +2559,7 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
     end
     end
   end
+
 #push-options "--z3rlimit 10 --fuel 2 --ifuel 2"
 let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) preArgs) (arg:exp)
   : Lemma
@@ -2833,8 +2584,10 @@ let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) 
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
           bind_squash (steps e e' h lt) (fun sts1 ->
+            lem_forall_values_are_values_prod (q_io_args op) h;
             assert ((q_io_args op) ⫄ (h, fs_arg', arg_sub));
-            let (arg_val, (| lt1, lt' |)) = destruct_steps_ecall_arg_comp op arg_sub e' h lt sts1 arg_sub h [] fs_arg' in
+            sem_expr_shape_comp fs_arg' arg_sub h;
+            let (arg_val, (| lt1, lt' |)) = destruct_steps_ecall_arg op arg_sub e' h lt sts1 in
             eliminate forall lt1 arg_val. e_beh arg_sub arg_val h lt1 ==> (exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg) with lt1 arg_val;
             lem_value_is_irred arg_val;
             eliminate exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg

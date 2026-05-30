@@ -796,15 +796,15 @@ let get_epair_e2 (x:closed_exp{EPair? x}) =
   | EPair e1 e2 -> e2
 
 (* We need syntactic types for this, or at least the top-level shape of types *)
-let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
+let rec sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
   | TUnit -> e == EUnit
   | TBool -> e == ETrue \/ e == EFalse
   | TFileDescr -> EFileDescr? e
   | TString -> EString? e
   | TArr t1 t2 -> ELam? e /\ is_closed e
-  | TPair t1 t2 -> EPair? e /\ is_value (get_epair_e1 e) /\ is_value (get_epair_e2 e)
-  | TSum t1 t2 -> (EInl? e /\ is_value (get_einl_v e)) \/ (EInr? e /\ is_value (get_einr_v e))
+  | TPair t1 t2 -> EPair? e /\ is_value (get_epair_e1 e) /\ is_value (get_epair_e2 e) /\ sem_value_shape t1 (get_epair_e1 e) /\ sem_value_shape t2 (get_epair_e2 e)
+  | TSum t1 t2 -> (EInl? e /\ is_value (get_einl_v e) /\ sem_value_shape t1 (get_einl_v e)) \/ (EInr? e /\ is_value (get_einr_v e) /\ sem_value_shape t2 (get_einr_v e))
   | TNat -> EZero? e \/ ESucc? e
 
 let indexed_sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
