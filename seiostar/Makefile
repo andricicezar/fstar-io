@@ -3,7 +3,7 @@ FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
-ROOTS := RrHP.Tests.fst \
+ROOTS := RrHP.fst \
          RQ.TypingRelation.Tests.fst \
          RQ.Metaprogram.Tests.fst \
 	 RunningExample.fst \
