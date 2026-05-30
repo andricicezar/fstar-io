@@ -24,6 +24,9 @@ open ExamplesIO
 %splice_t[tgt_apply_io_bind_read_if_write] (generate_derivation "tgt_apply_io_bind_read_if_write" (`apply_io_bind_read_if_write))
 
 %splice_t[tgt_open2_read_write] (generate_derivation "tgt_open2_read_write" (`open2_read_write))
+%splice_t[tgt_test_letbb_inl_body] (generate_derivation "tgt_test_letbb_inl_body" (`test_letbb_inl_body))
+%splice_t[tgt_test_letbb_closure] (generate_derivation "tgt_test_letbb_closure" (`test_letbb_closure))
+%splice_t[tgt_test_letbb_nested_inl] (generate_derivation "tgt_test_letbb_nested_inl" (`test_letbb_nested_inl))
 %splice_t[tgt_sendError400] (generate_derivation "tgt_sendError400" (`sendError400))
 %splice_t[tgt_get_req] (generate_derivation "tgt_get_req" (`get_req))
 

@@ -266,3 +266,82 @@ let mk_turniqet #a #x
   (proof:squash (thk_deriv._1 empty_eval))
   : a ⊫ x
   = (| thk_deriv, proof |)
+
+(** Helper functions **)
+
+
+let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
+  QWeaken QAxiom
+
+
+let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
+  QWeaken qVar1
+
+
+let qVar3 #g #a #b #c #d : (extend d (extend c (extend b (extend a g)))) ⊢ (fun fsG -> hd (tail (tail (tail fsG)))) =
+  QWeaken qVar2
+
+
+let qVar4 #g #a #b #c #d #e : (extend e (extend d (extend c (extend b (extend a g))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail fsG))))) =
+  QWeaken qVar3
+
+
+let qVar5 #g #a #b #c #d #e #f : (extend f (extend e (extend d (extend c (extend b (extend a g)))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail fsG)))))) =
+  QWeaken qVar4
+
+
+let qVar6 #g #a #b #c #d #e #f #h : (extend h (extend f (extend e (extend d (extend c (extend b (extend a g))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail fsG))))))) =
+  QWeaken qVar5
+
+
+let qVar7 #g #a #b #c #d #e #f #h #i : (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g)))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail fsG)))))))) =
+  QWeaken qVar6
+
+
+let qVar8 #g #a #b #c #d #e #f #h #i #j : (extend j (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g))))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail (tail fsG))))))))) =
+  QWeaken qVar7
+
+
+let qVar9 #g #a #b #c #d #e #f #h #i #j #k : (extend k (extend j (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g)))))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail (tail (tail fsG)))))))))) =
+  QWeaken qVar8
+
+let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g) b wpf)
+  (qx : typing g x) (qf : typing _ f)
+  : typing g (fs_oval_app (fs_oval_lambda f) x)
+  = QApp (QLambda qf) qx
+
+unfold let fs_ocomp_let_io_ex
+  (#g:typ_env)
+  (#a #b:qType)
+  (#preM:spec_env g)
+  (m:fs_ocomp g (a ^+ qUnit) preM)
+  (#preK:spec_env (extend a (extend (a ^+ qUnit) g)))
+  (k:fs_ocomp (extend a (extend (a ^+ qUnit) g)) (b ^+ qUnit) preK)
+  : fs_ocomp g (b ^+ qUnit)
+      (spec_env_bind preM
+        (spec_env_case (fs_oval_axiom g (a ^+ qUnit))
+          preK
+          (spec_env_axiom #(extend (a ^+ qUnit) g) #qUnit)))
+  =
+  fs_ocomp_bind m
+    (fs_ocomp_case_oval
+      (fs_oval_axiom g (a ^+ qUnit))
+      k
+      (fs_ocomp_return_oval
+        (fs_oval_fmap
+          (fs_oval_axiom (extend (a ^+ qUnit) g) qUnit)
+          (fun (x:fs_val qUnit) -> (Inr x <: fs_val (b ^+ qUnit))))))
+
+val qLetIOEx : #g:typ_env ->
+  #a:qType ->
+  #b:qType ->
+  #preM:spec_env g ->
+  #m:fs_ocomp g (a ^+ qUnit) preM ->
+  #preK:spec_env (extend a (extend (a ^+ qUnit) g)) ->
+  #k:fs_ocomp (extend a (extend (a ^+ qUnit) g)) (b ^+ qUnit) preK ->
+  typing_io g m ->
+  typing_io (extend a (extend (a ^+ qUnit) g)) k ->
+  typing_io g (fs_ocomp_let_io_ex m k)
+
+ let qLetIOEx qm qk =
+  QBind qm (QCaseIO QAxiom qk (QReturn (QInr QAxiom)))

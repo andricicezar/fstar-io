@@ -127,6 +127,13 @@ let either_branches_of_ty (ty:typ) : Tac (option (term & term)) =
     Some (typ_translation a None, typ_translation (`unit) None)
   | _ -> None
 
+let either_branch_types_of_ty (ty:typ) : Tac (option (typ & typ)) =
+  let (h, args) = collect_app ty in
+  match get_fv h, args with
+  | Some "FStar.Pervasives.either", [(a, _); (b, _)] -> Some (a, b)
+  | Some "Trace.resexn", [(a, _)] -> Some (a, `unit)
+  | _ -> None
+
 (** Try to extract the qTypes for the [a] and [b] branches of [either a b]
     from [fstar_ty] (the expected F* type of [qfs]); if [fstar_ty] is [None],
     fall back to type-checking [qfs] in [g]. *)
@@ -170,6 +177,8 @@ let mk_wrap_deriv (typj : term) : Tot term =
   pack_ln (Tv_Abs g_binder packed_turnstile_g)
 
 let mk_qref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit)]
+unfold let trivial_ref0 (#a:Type0) (_:a) : Type0 = True
+let mk_qerase_ref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit); (`trivial_ref0, Q_Implicit)]
 
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
@@ -178,7 +187,7 @@ let mk_qtrue : term = mk_app (`QTrue) []
 let mk_qfalse : term = mk_app (`QFalse) []
 
 let mk_qif (b:term) (t1:term) (t2:term) : term =
-  mk_app (`QIf) [(mk_qref b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
+  mk_app (`QIf) [(mk_qerase_ref b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 
 let mk_qzero : term = mk_app (`QZero) []
 let mk_qsucc (n:term) : term = mk_app (`QSucc) [(n, Q_Explicit)]
@@ -190,12 +199,12 @@ let rec mk_nat_literal (n:nat) : Tot term (decreases n) =
 
 let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
 let mk_qeq_string (v1 v2 : term) : term =
-  mk_app (`QStringEq) [(v1, Q_Explicit); (v2, Q_Explicit)]
+  mk_app (`QStringEq) [(mk_qerase_ref v1, Q_Explicit); (mk_qerase_ref v2, Q_Explicit)]
 
 let mk_qmkpair (t1:term) (t2:term) : term =
   mk_app (`QMkpair) [(mk_qref t1, Q_Explicit); (mk_qref t2, Q_Explicit)]
-let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
-let mk_qsnd (t:term) : term = mk_app (`QSnd) [(t, Q_Explicit)]
+let mk_qfst (t:term) : term = mk_app (`QFst) [(mk_qerase_ref t, Q_Explicit)]
+let mk_qsnd (t:term) : term = mk_app (`QSnd) [(mk_qerase_ref t, Q_Explicit)]
 
 let mk_qinl (t:term) : term = mk_app (`QInl) [(mk_qref t, Q_Explicit)]
 let mk_qinr (t:term) : term = mk_app (`QInr) [(mk_qref t, Q_Explicit)]
@@ -214,25 +223,37 @@ let mk_qinr_explicit (a b inner:term) : term =
   mk_app (`QInr) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
                   (unk, Q_Implicit); (unk, Q_Implicit); (mk_qref inner, Q_Explicit)]
 let mk_qcase (t:term) (x1:term) (x2:term) : term =
-  mk_app (`QCase) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
+  mk_app (`QCase) [(mk_qerase_ref t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
 let mk_qaxiom : term = mk_app (`QAxiom) []
 let mk_qweaken (t:term) : term = mk_app (`QWeaken) [(t, Q_Explicit)]
 let rec mk_qvarI (n:int) : term =
   if n <= 0 then mk_qaxiom
-  else mk_qweaken (mk_qvarI (n-1))
+  else match n with
+  | 1 -> mk_app (`qVar1) []
+  | 2 -> mk_app (`qVar2) []
+  | 3 -> mk_app (`qVar3) []
+  | 4 -> mk_app (`qVar4) []
+  | 5 -> mk_app (`qVar5) []
+  | 6 -> mk_app (`qVar6) []
+  | 7 -> mk_app (`qVar7) []
+  | 8 -> mk_app (`qVar8) []
+  | 9 -> mk_app (`qVar9) []
+  | _ -> mk_qweaken (mk_qvarI (n-1))
 let mk_qlambda (body:term) : term = mk_app (`QLambda) [(mk_qref body, Q_Explicit)]
 let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (mk_qref arg, Q_Explicit)]
 
 let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
-let mk_qappcomp (f arg : term) : term = mk_app (`QAppIO) [(f, Q_Explicit); (arg, Q_Explicit)]
-let mk_qcall (op:term) (args:term) : term = mk_app (`QCall) [(op, Q_Explicit); (args, Q_Explicit)]
+let mk_qappcomp (f arg : term) : term = mk_app (`QAppIO) [(f, Q_Explicit); (mk_qref arg, Q_Explicit)]
+let mk_qcall (op:term) (args:term) : term = mk_app (`QCall) [(op, Q_Explicit); (mk_qerase_ref args, Q_Explicit)] (** the operation takes non-refined arguments **)
 let mk_qreturn (t:term) : term = mk_app (`QReturn) [(mk_qref t, Q_Explicit)]
 let mk_qbind (e:term) (f:term) : term = mk_app (`QBind) [(e, Q_Explicit); (f, Q_Explicit)]
 let mk_qifcomp (b:term) (t1:term) (t2:term) : term =
-  mk_app (`QIfIO) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
+  mk_app (`QIfIO) [(mk_qerase_ref b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qcasecomp (t:term) (x1:term) (x2:term) : term =
-  mk_app (`QCaseIO) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
+  mk_app (`QCaseIO) [(mk_qerase_ref t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
+let mk_qletioex_explicit (qm qk:term) : term =
+  mk_app (`qLetIOEx) [(qm, Q_Explicit); (qk, Q_Explicit)]
 
 (** Map between de Brujin F* variables and LambdaIO variables **)
 type db_mapping = int -> option int
@@ -323,14 +344,26 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     | Some "FStar.Pervasives.Native.snd", [v1] ->
       mk_qsnd (create_derivation g dbmap prior_derivs fuel false None v1)
     | Some "FStar.Pervasives.Inl", [v1] ->
-      let inner = create_derivation g dbmap prior_derivs fuel false None v1 in
-      (match extract_either_branches g fstar_ty qfs with
-       | Some (qa, qb) -> mk_qinl_explicit qa qb inner
+      let branches_ty = match fstar_ty with
+        | Some ty -> either_branch_types_of_ty ty
+        | None -> None in
+      let inner_ty = match branches_ty with
+        | Some (a, _) -> Some a
+        | None -> None in
+      let inner = create_derivation g dbmap prior_derivs fuel false inner_ty v1 in
+      (match branches_ty with
+       | Some (a, b) -> mk_qinl_explicit (typ_translation a None) (typ_translation b None) inner
        | None -> mk_qinl inner)
     | Some "FStar.Pervasives.Inr", [v1] ->
-      let inner = create_derivation g dbmap prior_derivs fuel false None v1 in
-      (match extract_either_branches g fstar_ty qfs with
-       | Some (qa, qb) -> mk_qinr_explicit qa qb inner
+      let branches_ty = match fstar_ty with
+        | Some ty -> either_branch_types_of_ty ty
+        | None -> None in
+      let inner_ty = match branches_ty with
+        | Some (_, b) -> Some b
+        | None -> None in
+      let inner = create_derivation g dbmap prior_derivs fuel false inner_ty v1 in
+      (match branches_ty with
+       | Some (a, b) -> mk_qinr_explicit (typ_translation a None) (typ_translation b None) inner
        | None -> mk_qinr inner)
     | Some "IOStar.io_return", [v] ->
       let v_ty = match fstar_ty with
@@ -366,21 +399,8 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       match inspect_ln k with
       | Tv_Abs bin body ->
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
-        let qk_body = create_derivation g dbmap' prior_derivs fuel true None body in
-        let qinr_node =
-          let branches =
-            match fstar_ty with
-            | Some t -> (match strip_io t with
-                         | Some payload -> either_branches_of_ty payload
-                         | None -> None)
-            | None -> None
-          in
-          match branches with
-          | Some (qa, qb) -> mk_qinr_explicit qa qb mk_qaxiom
-          | None -> mk_qinr mk_qaxiom
-        in
-        let qinr_branch = mk_app (`QReturn) [(qinr_node, Q_Explicit)] in
-        mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
+        let qk_body = create_derivation g dbmap' prior_derivs fuel true fstar_ty body in
+        mk_qletioex_explicit qm qk_body
       | _ -> fail "IOStar.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f]
@@ -511,18 +531,15 @@ let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
     (fun () -> or_else trivial trefl)
     (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
-
-unfold let trivial_ref0 (#a:Type0) (_:a) : Type0 = True
-
 (** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
     by substituting in [fun (_:X) -> Prims.l_True].
     As we substitute, we also propagate the substitution into the recorded types
     of the remaining implicits, in case an implicit's domain references an earlier
     implicit. *)
-let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qderivation:term) : Tac term =
-  let rec go (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qd:term) : Tac term =
+let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qderivation:term) : Tac (term * nat) =
+  let rec go (l:list (FStar.Stubs.Reflection.Types.namedv & typ)) (qd:term) (left:nat) : Tac (term * nat) =
     match l with
-    | [] -> qd
+    | [] -> (qd, left)
     | (nv, typ) :: rest ->
       match inspect_ln typ with
       | Tv_Arrow b _ ->
@@ -532,15 +549,15 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
         let sub = [FStar.Stubs.Syntax.Syntax.NT nv true_fun] in
         let qd' = subst_term sub qd in
         let rest' = map (fun (nv', t) -> (nv', subst_term sub t)) rest in
-        go rest' qd'
+        go rest' qd' left
       | _ ->
         (** Leftover implicit is not [_ -> Type0] (typically a stray [qType]
             from a failed QInl/QInr inversion through [change_refinement]).
             Skip it so the substitution machinery does not get a derivation
             term piped into [trivial_ref0]'s [#a:Type0] slot. *)
-        go rest qd
+        go rest qd (left + 1)
   in
-  go l qderivation
+  go l qderivation 0
 
 let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
@@ -548,17 +565,17 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   let t0 = curms () in
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) false in
   let t1 = curms () in
-  print ("  done instantiating implicits " ^ string_of_int (t1 - t0) ^ " ms");
+  print ("  done instantiating implicits, " ^ string_of_int (List.length l) ^ " left, " ^ string_of_int (t1 - t0) ^ "ms");
   let t0 = t1 in
   // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  let qderivation = fill_trivial_refinements l qderivation in
+  let (qderivation, left) = fill_trivial_refinements l qderivation in
   let t1 = curms () in
-  print ("  done filling refinements " ^ string_of_int (t1 - t0) ^ " ms");
+  print ("  done filling refinements, " ^ string_of_int left ^ " implicits left, " ^ string_of_int (t1 - t0) ^ "ms");
   let t0 = t1 in
 
   let qderivation = norm_well_typed_term g [delta_only qType_defs_list; primops; iota; simplify] qderivation in
   let t1 = curms () in
-  print ("  done normalizing derivation " ^ string_of_int (t1 - t0) ^ " ms");
+  print ("  done normalizing derivation " ^ string_of_int (t1 - t0) ^ "ms");
   let t0 = t1 in
 
   // print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
@@ -566,7 +583,7 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   print_debug ("DEBUG: before core_check_term");
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
   let t1 = curms () in
-  print ("  done core_check_term " ^ string_of_int (t1 - t0) ^ " ms");
+  print ("  done core_check_term " ^ string_of_int (t1 - t0) ^ "ms");
   let t0 = t1 in
 
   (match ngoals () with
@@ -574,7 +591,7 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   | 1 ->  with_compat_pre_core 0 (fun () -> prove_equality nm unfold_names)
   | _ -> fail "too many goals");
   let t1 = curms () in
-  print ("  done proving equality " ^ string_of_int (t1 - t0) ^ " ms");
+  print ("  done proving equality " ^ string_of_int (t1 - t0) ^ "ms");
   set_guard_policy Force;
   lem_retype_token g qderivation desired_qtyp' desired_qtyp;
   token_as_typing g qderivation E_Total desired_qtyp;
@@ -621,10 +638,10 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
     let t0 = curms () in
-    print ("SPLICE_BEGIN " ^ nm ^ " " ^ string_of_int t0);
+    print ("SPLICE_BEGIN " ^ nm);
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping [] qprog in
     let t1 = curms () in
-    print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
+    print ("SPLICE_END " ^ nm ^ " " ^ string_of_int (t1 - t0) ^ "ms");
     let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
     ([], se_for, [])
   end
@@ -661,10 +678,10 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
         by the prior derivations, letting F*'s typechecker infer it. **)
     let prior_derivs = deps |> map (fun (src_name, deriv) -> (src_name, use_deriv deriv)) in
     let t0 = curms () in
-    print ("SPLICE_BEGIN " ^ nm ^ " " ^ string_of_int t0);
+    print ("SPLICE_BEGIN " ^ nm);
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping prior_derivs qprog in
     let t1 = curms () in
-    print ("SPLICE_END " ^ nm ^ " " ^ string_of_int t1 ^ " ELAPSED_MS " ^ string_of_int (t1 - t0));
+    print ("SPLICE_END " ^ nm ^ " " ^ string_of_int (t1 - t0) ^ "ms");
     let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
     ([], se_for, [])
   end

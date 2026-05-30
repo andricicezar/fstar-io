@@ -69,3 +69,15 @@ let eq_string s t =
 let echo (fd1 fd2:file_descr) =
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
+
+let test_letbb_inl_body () : io (resexn file_descr) =
+  let!@! fd = io_call OOpen "/tmp/input" in
+  io_return (Inl fd)
+
+let test_letbb_closure (fd2:file_descr) : io (resexn unit) =
+  let!@! data = io_call ORead fd2 in
+  io_call OWrite (fd2, data)
+
+let test_letbb_nested_inl () : io (resexn (either file_descr file_descr)) =
+  let!@! fd = io_call OOpen "/tmp/x" in
+  io_return (Inl (Inl fd))

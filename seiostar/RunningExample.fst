@@ -26,14 +26,14 @@ let validate olds task news = eq_string task news
 let read_file (f : string) : io (resexn string) =
   let!@! fd = io_call OOpen f in
   let!@! r = io_call ORead fd in
-  let!@! () = io_call OClose fd in
+  let!@! _ = io_call OClose fd in
   io_return (Inl r)
 
 
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
 let wrapper f task agent =
   let!@! contents = read_file f in
-  let!@ () = agent f task in
+  let!@ _ = agent f task in
   let!@! new_contents = read_file f in
   if validate contents task new_contents
   then io_return (Inl ())
@@ -443,7 +443,7 @@ let read_validate_sat_spec (f task contents : string) :
 let inner_computation_sat_spec (f task contents : string) (agent : string -> string -> io unit) :
   Lemma (requires theta (agent f task) ⊑ agent_spec) (ensures
     theta (
-      let!@ () = agent f task in
+      let!@ _ = agent f task in
       let!@! new_contents = read_file f in
       if validate contents task new_contents
       then io_return (Inl ())
@@ -480,7 +480,7 @@ let inner_computation_sat_spec (f task contents : string) (agent : string -> str
   in
   assert (
     theta (
-      let!@ () = agent f task in
+      let!@ _ = agent f task in
       let!@! new_contents = read_file f in
       if validate contents task new_contents
       then io_return (Inl ())
@@ -501,7 +501,7 @@ let wrapper_inner_step (f task : string) (agent : string -> string -> io unit) :
       match res with
       | Inl contents ->
         theta (
-          let!@ () = agent f task in
+          let!@ _ = agent f task in
           let!@! new_contents = read_file f in
           if validate contents task new_contents
           then io_return (Inl ())
@@ -527,7 +527,7 @@ let wrapper_inner_step (f task : string) (agent : string -> string -> io unit) :
   )
 = let k1 (contents:string) : hist (resexn unit) =
       theta (
-        let!@ () = agent f task in
+        let!@ _ = agent f task in
         let!@! new_contents = read_file f in
         if validate contents task new_contents
         then io_return (Inl ())
@@ -609,7 +609,7 @@ let wrapper_sat_spec f task agent :
       == {}
       theta (
         let!@! contents = read_file f in
-        let!@ () = agent f task in
+        let!@ _ = agent f task in
         let!@! new_contents = read_file f in
         if validate contents task new_contents
         then io_return (Inl ())
@@ -620,7 +620,7 @@ let wrapper_sat_spec f task agent :
         io_bind (read_file f) (fun res ->
           match res with
           | Inl contents ->
-            let!@ () = agent f task in
+            let!@ _ = agent f task in
             let!@! new_contents = read_file f in
             if validate contents task new_contents
             then io_return (Inl ())
@@ -632,7 +632,7 @@ let wrapper_sat_spec f task agent :
         theta_monad_morphism_bind (read_file f) (fun res ->
           match res with
           | Inl contents ->
-            let!@ () = agent f task in
+            let!@ _ = agent f task in
             let!@! new_contents = read_file f in
             if validate contents task new_contents
             then io_return (Inl ())
@@ -644,7 +644,7 @@ let wrapper_sat_spec f task agent :
         theta (
           match res with
           | Inl contents ->
-            let!@ () = agent f task in
+            let!@ _ = agent f task in
             let!@! new_contents = read_file f in
             if validate contents task new_contents
             then io_return (Inl ())
@@ -657,7 +657,7 @@ let wrapper_sat_spec f task agent :
         theta (
           match res with
           | Inl contents ->
-            let!@ () = agent f task in
+            let!@ _ = agent f task in
             let!@! new_contents = read_file f in
             if validate contents task new_contents
             then io_return (Inl ())
@@ -667,7 +667,7 @@ let wrapper_sat_spec f task agent :
       ) ;
       `hist_equiv` {
         hist_bind_commut_resexn (read_file_spec f) (fun contents ->
-          let!@ () = agent f task in
+          let!@ _ = agent f task in
           let!@! new_contents = read_file f in
           if validate contents task new_contents
           then io_return (Inl ())
@@ -678,7 +678,7 @@ let wrapper_sat_spec f task agent :
         match res with
         | Inl contents ->
           theta (
-            let!@ () = agent f task in
+            let!@ _ = agent f task in
             let!@! new_contents = read_file f in
             if validate contents task new_contents
             then io_return (Inl ())

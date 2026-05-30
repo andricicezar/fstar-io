@@ -82,7 +82,8 @@ Some warnings are expected, they are benign.
 ### Verify SEIO\*
 
 **Expected time.**
-Around 4 minutes (if running 8 jobs in parallel with `make verify -j 8`). 
+Around 25 minutes (if running 8 jobs in parallel with `make verify -j 8`).
+32GB of RAM required.
 
 **Script for this step.**
 After setting up F*, running `make` in this repository should verify all the F*

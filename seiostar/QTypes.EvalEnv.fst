@@ -10,22 +10,22 @@ include QTypes.TypEnv
 (** Evaluation Environment for IOStar: variable -> F* values **)
 type eval_env g =
   FE.restricted_t (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x)))
-  
+
 let empty_eval : eval_env empty =
   FE.on_dom
     (x:var{Some? (empty x)})
     #(fun x -> get_Type (Some?.v (empty x)))
     (fun _ -> assert False)
-unfold val hd : #t:qType -> #g:_ -> eval_env (extend t g) -> get_Type t
+val hd : #t:qType -> #g:_ -> eval_env (extend t g) -> get_Type t
 let hd #g fsG = fsG 0
-unfold val stack : #g:_ -> fsG:eval_env g -> #t:qType -> get_Type t -> eval_env (extend t g)
+val stack : #g:_ -> fsG:eval_env g -> #t:qType -> get_Type t -> eval_env (extend t g)
 let stack #g fsG #t fs_v =
   FE.on_dom
     (x:var{Some? ((extend t g) x)})
     #(fun x -> get_Type (Some?.v ((extend t g) x)))
     (fun y ->
       if y = 0 then fs_v else fsG (y-1))
-unfold val tail : #t:qType -> #g:_ -> eval_env (extend t g) -> eval_env g
+val tail : #t:qType -> #g:_ -> eval_env (extend t g) -> eval_env g
 let tail #t #g fsG =
   FE.on_dom
     (x:var{Some? (g x)})

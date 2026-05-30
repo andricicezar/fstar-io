@@ -548,6 +548,54 @@ let fs_ocomp_case cond inlc inrc =
   fs_ocomp_bind' cond (fun cond' ->
     fs_ocomp_case_val cond' inlc inrc)
 
+let lem_spec_env_bind'_inst (#g:typ_env) (#a:qType)
+  (preP:spec_env g) (preK:fs_val a -> spec_env g)
+  (fsG:eval_env g) (x:fs_val a)
+  : Lemma
+    (requires spec_env_bind' preP preK fsG)
+    (ensures preP fsG /\ preK x fsG)
+  = lem_hd_stack #a #g fsG x;
+    lem_tail_stack_inverse #g fsG #a x;
+    assert (spec_env_bind' #g #a preP preK fsG ==
+      (preP fsG /\ (forall (y:fs_val a). preK (hd (stack fsG y)) (tail (stack fsG y)))))
+      by (let open FStar.Tactics.V1 in
+          norm [delta_only [`%spec_env_bind'; `%spec_env_bind]];
+          trefl ())
+
+let lem_stack_subst (#g:typ_env) (fsG:eval_env g) #t (v1 v2:get_Type t)
+  : Lemma (requires v1 == v2) (ensures stack fsG v1 == stack fsG v2)
+  = ()
+
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 4"
+let lem_spec_env_case'_inl
+  #g (#a #b:qType)
+  (preInlc:spec_env (extend a g))
+  (preInrc:spec_env (extend b g))
+  (fsG:eval_env g)
+  (x:fs_val a)
+  : Lemma
+    (requires (spec_env_case' #g #a #b (Inl x <: fs_val (a ^+ b)) preInlc preInrc) fsG)
+    (ensures preInlc (stack fsG x))
+  = let cond : fs_val (a ^+ b) = Inl x in
+    assert ((spec_env_case' #g #a #b cond preInlc preInrc) fsG ==
+            ((Inl? cond ==> preInlc (stack fsG (Inl?.v cond))) /\
+             (Inr? cond ==> preInrc (stack fsG (Inr?.v cond)))))
+      by (let open FStar.Tactics.V1 in norm [delta_only [`%spec_env_case']]; trefl ());
+    assert (Inl? cond);
+    assert (preInlc (stack fsG (Inl?.v cond)));
+    assert (Inl?.v cond == x);
+    lem_stack_subst fsG (Inl?.v cond) x;
+    assert (stack fsG (Inl?.v cond) == stack fsG x)
+#pop-options
+
+val spec_env_case_ex : #g :typ_env ->
+                #a :qType ->
+                preInlc : spec_env (extend a g) ->
+                spec_env (extend (qResexn a) g)
+let spec_env_case_ex #_ #_ preInlc =
+  (fun fsG ->
+    (Inl? (hd fsG) ==> preInlc (stack (tail fsG) (Inl?.v (hd fsG)))))
+
 let fs_ocomp_var (g:typ_env) (x:var{Some? (g x)}) : fs_ocomp g (Some?.v (g x)) (spec_env_bind' #g #(Some?.v (g x)) (spec_env_index x) (fun v -> spec_env_return_comp #g #(Some?.v (g x)) (io_return v))) =
   fs_ocomp_return_oval (fs_oval_var g x)
 

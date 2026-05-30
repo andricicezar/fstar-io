@@ -14,30 +14,9 @@ let simplify_d () : Tac unit = norm [delta_only qType_defs_list; iota]
 val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
 
-// val var1 : fs_oval (extend qBool (extend qBool empty)) qBool
-//   (spec_env_bind (spec_env_weaken) (spec_env_axiom))
-// let var1 fsG = hd (tail fsG)
-
-// let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
-//   fun fsG -> hd (tail (tail fsG))
-
 let test_var0
   : (extend qBool empty) ⊢ var0
   = QAxiom
-
-let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
-  QWeaken QAxiom
-
-let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
-  QWeaken qVar1
-
-// let test_var1
-//   : (extend qBool (extend qBool empty)) ⊢ var1
-//   = qVar1
-
-// let test_var2
-//   : (extend qBool (extend qBool (extend qBool empty))) ⊢ var2
-//   = qVar2
 
 #push-options "--no_smt"
 
@@ -227,11 +206,6 @@ let test_wrap_snd_pa ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambda (QSnd QAxiom))
 
-let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g) b wpf)
-  (qx : typing g x) (qf : typing _ f)
-  : typing g (fs_oval_app (fs_oval_lambda f) x)
-  = QApp (QLambda qf) qx
-
 let three_lets : bool -> unit =
   fun x -> let p = (x, x) in let _y = x in let _z = fst p in ()
 
@@ -240,7 +214,7 @@ let three_lets : bool -> unit =
    by (simplify_via_norm ())
    = pack_turnstile (QLambda
       (qLet (QMkpair QAxiom QAxiom)
-      (qLet (QWeaken QAxiom)
+      (qLet qVar1
       (qLet (QFst qVar1)
       Qtt))))
 
@@ -348,7 +322,7 @@ let test_apply_write_const ()
 let test_apply_write ()
   : (qFileDescr ^-> qString ^->!@ (qResexn qUnit)) ⊩ apply_write
   by (simplify_via_norm ())
-  = pack_turnstile (QLambda (QLambdaIO (QCall OWrite (QMkpair (QWeaken QAxiom) QAxiom))))
+  = pack_turnstile (QLambda (QLambdaIO (QCall OWrite (QMkpair qVar1 QAxiom))))
 
 let test_apply_io_bind_const ()
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
@@ -385,7 +359,7 @@ let test_apply_io_bind_write ()
   = pack_turnstile (QLambda (QLambdaIO (
       QBind
          (QReturn QAxiom)
-         (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) QAxiom)))))
+         (QCall OWrite (QMkpair qVar2 QAxiom)))))
 
 #set-options "--print_implicits"
 
@@ -393,9 +367,9 @@ let test_apply_io_bind_write ()
 let test_apply_io_bind_read_write ()
   : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (simplify_via_norm ())
-  = pack_turnstile (QLambda (QLambdaIO (QBind (QCall ORead (QWeaken QAxiom))
+  = pack_turnstile (QLambda (QLambdaIO (QBind (QCall ORead qVar1)
     (QCaseIO QAxiom
-      (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+      (QCall OWrite (QMkpair qVar2 (QStringLit "data")))
       (QReturn (QInr QAxiom))))))
 
 [@@ (preprocess_with simplify_qType)]
@@ -403,9 +377,9 @@ let test_apply_io_bind_read_write' ()
    : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
    by (simplify_via_norm ())
    = pack_turnstile (QLambda (QLambdaIO (
-       QBind (QCall ORead (QWeaken QAxiom))
+       QBind (QCall ORead qVar1)
          (QCaseIO QAxiom
-           (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+           (QCall OWrite (QMkpair qVar2 (QStringLit "data")))
            (QReturn (QInr QAxiom))))))
 
 [@@ (preprocess_with simplify_qType)]
@@ -414,9 +388,9 @@ let test_apply_io_bind_read_if_write ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambda (QLambdaIO
       (QBind
-        (QCall ORead (QWeaken QAxiom))
+        (QCall ORead qVar1)
          (QCaseIO QAxiom
-           (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+           (QCall OWrite (QMkpair qVar2 (QStringLit "data")))
            (QReturn (QInr QAxiom))))))
 
 let test_sendError400 ()
@@ -493,7 +467,7 @@ let test_nat_fact_five ()
               QZero
               (QLambda
                 (QNRec
-                  (QSnd (QWeaken QAxiom))
+                  (QSnd qVar1)
                   QAxiom
                   (QLambda (QSucc QAxiom)))))))))
 
@@ -755,7 +729,7 @@ let test_ior_simple_ref_bind ()
   = pack_turnstile (QLambdaIO (
     QBind
       (QCall OOpen (QStringLit "./string"))
-      (QReturn (QRef (QWeaken QAxiom)))))
+      (QReturn (QRef qVar1))))
 
 (** Example 6: Return refined true constant *)
 let test_ior_io_ret_ref_true ()
@@ -890,8 +864,8 @@ let test_ior_pure_validate ()
  by (simplify_via_norm ())
   = pack_turnstile (
       QLambda (QLambda (
-        (QIf (QApp QAxiom (QWeaken QAxiom))
-            (QInl (QRetype (QWeaken QAxiom)))
+        (QIf (QApp QAxiom qVar1)
+            (QInl (QRetype qVar1))
             (QInr Qtt)))))
 
 [@@ (preprocess_with simplify_qType)]
@@ -901,8 +875,8 @@ let test_ior_io_validate_simp ()
   = pack_turnstile (
       QLambda (QLambdaIO (
         (QReturn
-          (QIf (QApp QAxiom (QWeaken QAxiom))
-              (QInl (QRetype (QWeaken QAxiom)))
+          (QIf (QApp QAxiom qVar1)
+              (QInl (QRetype qVar1))
               (QInr Qtt))))))
 **)
 
@@ -917,7 +891,7 @@ let test_ior_io_validate_simp ()
 //           (QBind (QCall ORead QAxiom)
 //             (QCaseIO QAxiom
 //               (QReturn
-//                 (QIf (QApp (QWeaken (QWeaken (QWeaken (QWeaken QAxiom)))) QAxiom)
+//                 (QIf (QApp qVar4 QAxiom)
 //                     (QInl (QRetype QAxiom))
 //                     (QInr Qtt)))
 //               (QReturn (QInr QAxiom))))
