@@ -1387,6 +1387,8 @@ let helper_compat_ocomp_call_oval_steps (op:io_ops) (h:history) (lt:local_trace 
   lem_values_are_values (q_io_args op) h fs_arg arg';
   let io_arg = cast_io_args op fs_arg in
   let io_res = cast_io_res op fs_arg fs_r in
+  lem_q_io_args op;
+  lem_q_io_res op;
   destruct_thetaP_call op io_arg h lt io_res;
   FStar.Squash.bind_squash #(steps arg arg' h []) () (fun sts_arg ->
   construct_steps_ecall op arg arg' h [] sts_arg;

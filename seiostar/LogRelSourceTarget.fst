@@ -279,7 +279,7 @@ let lem_unfold_in_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> 
   assert (((t1 ^-> t2) ∈ (h, fs_e1, ELam e11)) <==> arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%arrow_in_body;
                                            `%get_rel;
-                                           `%(^->);
+                                           `%(^->); `%qArrR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -308,7 +308,7 @@ let lem_unfold_in_io_arrow_to_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_va
   assert (((t1 ^->!@ t2) ∈ (h, fs_e1, ELam e11)) <==> io_arrow_in_body_direct t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%io_arrow_in_body_direct;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -339,7 +339,7 @@ let lem_unfold_in_io_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^
   assert (((t1 ^->!@ t2) ∈ (h, fs_e1, ELam e11)) <==> io_arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%io_arrow_in_body; `%io_arrow_wrap;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];

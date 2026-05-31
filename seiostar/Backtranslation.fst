@@ -206,7 +206,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
     fs_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
 #pop-options
 
-#push-options "--z3rlimit 32 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2 --split_queries always"
 private
 let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' (q_io_args o))
   : Lemma (backtranslate_exp (TyCall o h') ==

@@ -11,9 +11,9 @@ let simplify_stack_ops () : Tac unit =
 
 let qType_defs_list = [
       `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
-      `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
+      `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;`%qNatR;`%qArrR;`%qArrIOR;
       `%q_io_args; `%q_io_res;
       `%fs_oval; `%fs_val;
       `%change_refinement;`%ref_type;`%ref_type';`%pack;
@@ -25,6 +25,5 @@ let simplify_qType_g g (x:term) : Tac term =
       delta_only qType_defs_list;
     iota;
   ] x
-
 
 let simplify_qType (x:term) : Tac term = simplify_qType_g (top_env ()) x

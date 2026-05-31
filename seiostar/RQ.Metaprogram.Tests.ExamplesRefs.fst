@@ -23,3 +23,11 @@ open ExamplesRefs
 %splice_t[tgt_seq_qref] (generate_derivation "tgt_seq_qref" (`seq_qref))
 %splice_t[tgt_seq_p_implies_q] (generate_derivation "tgt_seq_p_implies_q" (`seq_p_implies_q))
 %splice_t[tgt_context] (generate_derivation "tgt_context" (`context))
+
+%splice_t[tgt_proj_into_refined] (generate_derivation "tgt_proj_into_refined" (`proj_into_refined))
+%splice_t[tgt_fun_beh_ref] (generate_derivation "tgt_fun_beh_ref" (`fun_beh_ref))
+%splice_t[tgt_ret_refined_arg] (generate_derivation "tgt_ret_refined_arg" (`ret_refined_arg))
+%splice_t[tgt_inl_refined_arg] (generate_derivation "tgt_inl_refined_arg" (`inl_refined_arg))
+%splice_t[tgt_pure_validate] (generate_derivation "tgt_pure_validate" (`pure_validate))
+%splice_t[tgt_pure_validate2] (generate_derivation "tgt_pure_validate2" (`pure_validate2))
+%splice_t[tgt_pure_validate3] (generate_derivation "tgt_pure_validate3" (`pure_validate3))
