@@ -196,9 +196,7 @@ let mk_qerase_ref (x:term) : term = mk_app (`QRef) [(x, Q_Explicit); (`trivial_r
     it stuck on [get_rel ?a] for the refined [QArr]/[QArrIO]/[QNat] constructors),
     while keeping [#ref] open preserves refinement inference (e.g. [t == true]). *)
 let mk_qref_typed (a x:term) : term =
-  let unk = pack_ln Tv_Unknown in
-  mk_app (`QRef) [(unk, Q_Implicit); (a, Q_Implicit); (unk, Q_Implicit); (unk, Q_Implicit);
-                  (x, Q_Explicit)]
+  mk_app (`QRef) [(unk, Q_Implicit); (a, Q_Implicit); (x, Q_Explicit)]
 
 (** Wrap [x] in [QRef]. When the F* type [oty] is an arrow -- possibly under one
     or more refinements, e.g. [(f:(t1 -> t2){P f})] -- supply the translated
@@ -278,13 +276,11 @@ let mk_qinr (t:term) : term = mk_app (`QInr) [(mk_qref t, Q_Explicit)]
     F*'s unifier cannot solve through [get_rel ?b] when the constructor's
     result is compared against a known sum type. *)
 let mk_qinl_explicit (a b:term) (inner_oty:option typ) (inner:term) : Tac term =
-  let unk = pack_ln Tv_Unknown in
   mk_app (`QInl) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
-                  (unk, Q_Implicit); (unk, Q_Implicit); (mk_qref_oty inner_oty inner, Q_Explicit)]
+                  (mk_qref_oty inner_oty inner, Q_Explicit)]
 let mk_qinr_explicit (a b:term) (inner_oty:option typ) (inner:term) : Tac term =
-  let unk = pack_ln Tv_Unknown in
   mk_app (`QInr) [(unk, Q_Implicit); (a, Q_Implicit); (b, Q_Implicit);
-                  (unk, Q_Implicit); (unk, Q_Implicit); (mk_qref_oty inner_oty inner, Q_Explicit)]
+                  (mk_qref_oty inner_oty inner, Q_Explicit)]
 let mk_qcase (t:term) (x1:term) (x2:term) : term =
   mk_app (`QCase) [(mk_qerase_ref t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
@@ -572,23 +568,15 @@ let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
   norm [delta_only qType_defs_list;
         delta_only unfold_names;
         delta_qualifier ["unfold"];
+//        delta_namespace ["QTypes.EvalEnv"];
         simplify; primops; iota;
         unascribe;
         simplify];
-  (**
-  norm [
-    delta_namespace ["QTypes"; "QTypes.TypEnv"; "QTypes.EvalEnv";"QTypes.OpenValComp";"FStar.FunctionalExtensionality"];
-    delta_only [`%LambdaIO.var;`%Some?.v;`%Mkdtuple2?._1; `%Mkdtuple2?._2];
-    simplify; primops;
-    delta_only [`%LambdaIO.var;`%Some?.v;`%Mkdtuple2?._1; `%Mkdtuple2?._2];
-    primops; iota;
-    simplify];
-  ignore (repeat split);**)
   dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
   print ("PROVE_EQ_DUMP_END " ^ nm);
   or_else
     (fun () -> or_else trivial trefl)
-    (fun () -> dump "RQ's unification failed"; fail "unification failed")
+    (fun () -> dump "RQ's unification failed"; fail "RQ's unification failed")
 
 (** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
     by substituting in [fun (_:X) -> Prims.l_True].
@@ -710,7 +698,7 @@ let mk_checked_opaque_let
 
 let use_deriv (deriv:term) : term =
   mk_app (`unwrap_deriv) [
-      (mk_app deriv [(pack_ln Tv_Unknown, Q_Explicit)], Q_Explicit)] // the g_env argument will be filled in by the caller's context
+      (mk_app deriv [(unk, Q_Explicit)], Q_Explicit)] // the g_env argument will be filled in by the caller's context
 
 let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & term)) : dsl_tac_t = fun (g, expected_t) ->
   set_guard_policy Force;

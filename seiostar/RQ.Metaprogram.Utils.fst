@@ -144,3 +144,5 @@ let branch_to_string (b:branch) : Tac string =
 
 let branches_to_string (brs:list branch) : Tac string =
   FStar.Tactics.Util.fold_left (fun acc b -> acc ^ (branch_to_string b) ^ "; ") "" brs
+
+let unk = pack_ln Tv_Unknown
