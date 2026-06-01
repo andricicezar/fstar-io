@@ -38,8 +38,7 @@ open Examples
 %splice_t[tgt_anif] (generate_derivation "tgt_anif" (`anif))
 %splice_t[tgt_const_str] (generate_derivation "tgt_const_str" (`const_str))
 %splice_t[tgt_greeting] (generate_derivation "tgt_greeting" (`greeting))
-%splice_t[tgt_negb_pred] (generate_derivation "tgt_negb_pred" (`negb_pred))
-%splice_t[tgt_negb_pred'] (generate_derivation_using "tgt_negb_pred'" (`negb_pred) [
+%splice_t[tgt_negb_pred] (generate_derivation_using "tgt_negb_pred" (`negb_pred) [
   (`%negb, `tgt13)
 ])
 
@@ -53,13 +52,11 @@ let three_lets : bool -> unit =
 (* --- PairsSums --- *)
 
 %splice_t[tgt_make_pair] (generate_derivation "tgt_make_pair" (`make_pair))
-// %splice_t[tgt_pair_of_functions] (generate_derivation "tgt_pair_of_functions" (`pair_of_functions))
-%splice_t[tgt_pair_of_functions'] (generate_derivation_using "tgt_pair_of_functions'" (`pair_of_functions) [
+%splice_t[tgt_pair_of_functions] (generate_derivation_using "tgt_pair_of_functions" (`pair_of_functions) [
   (`%negb, `tgt13)
 ])
-// %splice_t[tgt_pair_of_functions2] (generate_derivation "tgt_pair_of_functions2" (`pair_of_functions2))
 
-%splice_t[tgt_pair_of_functions2'] (generate_derivation_using "tgt_pair_of_functions2'" (`pair_of_functions2) [
+%splice_t[tgt_pair_of_functions2] (generate_derivation_using "tgt_pair_of_functions2" (`pair_of_functions2) [
   (`%negb, `tgt13);
   (`%if2, `tgt14);
 ])
@@ -67,29 +64,24 @@ let three_lets : bool -> unit =
 %splice_t[tgt_wrap_fst] (generate_derivation "tgt_wrap_fst" (`wrap_fst))
 %splice_t[tgt_snd_pair] (generate_derivation "tgt_snd_pair" (`snd_pair))
 %splice_t[tgt_wrap_snd] (generate_derivation "tgt_wrap_snd" (`wrap_snd))
-// wrap_fst_pa / wrap_snd_pa are point-free (= fst / snd); metaprogram requires explicit lambdas
-// %splice_t[tgt_wrap_fst_pa] (generate_derivation "tgt_wrap_fst_pa" (`wrap_fst_pa))
-// %splice_t[tgt_wrap_snd_pa] (generate_derivation "tgt_wrap_snd_pa" (`wrap_snd_pa))
 
 %splice_t[tgt_inl_true] (generate_derivation "tgt_inl_true" (`inl_true))
 %splice_t[tgt_inr_unit] (generate_derivation "tgt_inr_unit" (`inr_unit))
 %splice_t[tgt_return_either] (generate_derivation "tgt_return_either" (`return_either))
 %splice_t[tgt_match_either] (generate_derivation "tgt_match_either" (`match_either))
-// match_either' has Inr before Inl; metaprogram only supports Inl-first matches
-// %splice_t[tgt_match_either'] (generate_derivation "tgt_match_either'" (`match_either'))
 %splice_t[tgt_match_either_arg] (generate_derivation "tgt_match_either_arg" (`match_either_arg))
 
 (* --- NatTopLevel --- *)
 
-// %splice_t[tgt_apply_top_level_def] (generate_derivation "tgt_apply_top_level_def" (`apply_top_level_def))
-%splice_t[tgt_apply_top_level_def'] (generate_derivation_using "tgt_apply_top_level_def'" (`apply_top_level_def) [
+%splice_t[tgt_apply_top_level_def] (generate_derivation_using "tgt_apply_top_level_def" (`apply_top_level_def) [
   (`%thunked_id, `tgt6);
 ])
-// %splice_t[tgt_apply_top_level_def2] (generate_derivation "tgt_apply_top_level_def2" (`apply_top_level_def'))
-%splice_t[tgt_apply_top_level_def2'] (generate_derivation_using "tgt_apply_top_level_def2'" (`apply_top_level_def') [
+%splice_t[tgt_apply_top_level_def2] (generate_derivation_using "tgt_apply_top_level_def2" (`apply_top_level_def') [
   (`%thunked_id, `tgt6);
 ])
-%splice_t[tgt_papply_top_level_def] (generate_derivation "tgt_papply_top_level_def" (`papply__top_level_def))
+%splice_t[tgt_papply_top_level_def] (generate_derivation_using "tgt_papply_top_level_def" (`papply__top_level_def) [
+  (`%thunked_id, `tgt6);
+])
 
 %splice_t[tgt_nat_zero] (generate_derivation "tgt_nat_zero" (`nat_zero))
 %splice_t[tgt_nat_one] (generate_derivation "tgt_nat_one" (`nat_one))
@@ -97,8 +89,7 @@ let three_lets : bool -> unit =
 %splice_t[tgt_nat_succ_fn] (generate_derivation "tgt_nat_succ_fn" (`nat_succ_fn))
 %splice_t[tgt_nat_add2] (generate_derivation "tgt_nat_add2" (`nat_add2))
 %splice_t[tgt_nat_five1] (generate_derivation "tgt_nat_five1" (`nat_five1))
-// %splice_t[tgt_nat_five2] (generate_derivation "tgt_nat_five2" (`nat_five2))
-%splice_t[tgt_nat_five2'] (generate_derivation_using "tgt_nat_five2'" (`nat_five2) [
+%splice_t[tgt_nat_five2] (generate_derivation_using "tgt_nat_five2" (`nat_five2) [
   (`%nat_add2, `tgt_nat_add2)
 ])
 %splice_t[tgt_fact_five] (generate_derivation "tgt_fact_five" (`fact_five))

@@ -155,9 +155,6 @@ let extract_either_branches (g:env) (fstar_ty:option typ) (qfs:term) : Tac (opti
     match fstar_ty with
     | Some t -> Some t
     | None -> None
-    // (match tc_term g qfs with
-    //            | Some (_, (_, t)), _ -> Some t
-    //            | _ -> None)
   in
   match ty_opt with
   | None -> None
@@ -213,25 +210,13 @@ let mk_qref_typed (a x:term) : term =
     [change_refinement]/[#ref]. Otherwise fall back to the implicit [mk_qref],
     which lets non-arrow refinements (e.g. [t == true]) be inferred from the
     expected type. *)
-let rec strip_refinements (ty:typ) : Tac typ =
+let rec strip_refinements (ty:typ) : typ =
   let v = inspect_ln ty in
   match v with
   | Tv_Refine b _ ->
     let s = (inspect_binder b).sort in
     strip_refinements s
   | _ -> ty
-
-(** Build the F* refinement predicate [fun (x:sort) -> phi] from a [Tv_Refine]'s
-    binder and formula, re-elaborating it (like the [Tv_Refine] case of
-    [typ_translation]) so it carries a residual computation type and the SMT
-    encoding does not warn about an unannotated abstraction. *)
-let mk_refine_pred (b:FStar.Stubs.Reflection.Types.binder) (phi:term) : Tac term =
-  let lam = pack_ln (Tv_Abs b phi) in
-  let env = top_env () in
-  let (tc_res, _) = tc_term env lam in
-  match tc_res with
-  | Some r -> let (lam', _) = r in lam'
-  | None -> lam
 
 (** Wrap [x] in [QRef], supplying [#ref] explicitly (as a trailing implicit
     after the explicit premise, like [mk_qerase_ref]). Used for base-type
@@ -254,7 +239,7 @@ let mk_qref_oty (oty:option typ) (x:term) : Tac term =
           let s = (inspect_binder b).sort in
           (match inspect_ln s with
            | Tv_Refine _ _ -> mk_qref x
-           | _ -> mk_qref_refined (mk_refine_pred b phi) x)
+           | _ -> mk_qref_refined (pack_ln (Tv_Abs b phi)) x)
         | _ -> mk_qref x))
   | None -> mk_qref x
 
@@ -318,7 +303,8 @@ let rec mk_qvarI (n:int) : term =
   | 8 -> mk_app (`qVar8) []
   | 9 -> mk_app (`qVar9) []
   | _ -> mk_qweaken (mk_qvarI (n-1))
-let mk_qlambda (oty:option typ) (body:term) : Tac term = mk_app (`QLambda) [(mk_qref_oty oty body, Q_Explicit)]
+let mk_qlambda (oty:option typ) (body:term) : Tac term =
+  mk_app (`QLambda) [(mk_qref_oty oty body, Q_Explicit)]
 let mk_qapp (oty:option typ) (f arg : term) : Tac term = mk_app (`QApp) [(f, Q_Explicit); (mk_qref_oty oty arg, Q_Explicit)]
 
 let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
@@ -357,34 +343,17 @@ let is_io_type (ty:term) : Tot bool =
     Each term should be of the form `deriv_name g_env_term`, i.e. the derivation fvar applied to g_env. **)
 type prior_derivations = list (string & term)
 
-let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (fuel:int) (is_comp:bool) (fstar_ty:option typ) (qfs:term) : Tac term =
-  if fuel <= 0 then
-    fail ("Unfolding depth exceeded while processing: " ^ tag_of qfs ^ " — " ^ term_to_string qfs
-          ^ "\nThis likely means an unsupported primitive (e.g., op_Equality, op_Hat) was encountered.")
-  else
+let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (is_comp:bool) (fstar_ty:option typ) (qfs:term) : Tac term =
   let _ = print_debug ("      in exp translation: " ^ tag_of qfs) in
   match inspect_ln qfs with
+  | Tv_UInst fv _
   | Tv_FVar fv -> begin
     let fnm = fv_to_string fv in
     match List.Tot.assoc fnm prior_derivs with
     | Some cached ->
       print_debug ("        reusing prior derivation for: " ^ fnm);
       cached
-    | None -> begin
-      print_debug ("        looking for fvar: " ^ fnm);
-      let fstar_ty = match fstar_ty with
-        | Some _ -> fstar_ty
-        | None -> match tc_term g qfs with
-          | Some (_, (_, ty)), _ -> Some ty
-          | _ -> None
-      in
-      let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
-      match inspect_ln qfs' with
-      | Tv_FVar fv' ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap prior_derivs (fuel - 1) is_comp fstar_ty qfs'
-      | _ -> create_derivation g dbmap prior_derivs (fuel - 1) is_comp fstar_ty qfs'
-    end
+    | None -> fail ("Derivation of " ^ fnm ^ " not found.")
   end
 
   | Tv_BVar v -> begin
@@ -406,7 +375,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
          | _ -> (false, None))
       | None -> (false, None)
     in
-    let qbody = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel body_is_comp body_ty body in
+    let qbody = create_derivation g (extend_dbmap_binder dbmap) prior_derivs body_is_comp body_ty body in
     if body_is_comp then mk_qlambdacomp qbody
     else mk_qlambda body_ty qbody
 
@@ -422,11 +391,11 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let ty1, ty2 = match comp_ty with
         | Some (a, b) -> Some a, Some b
         | None -> None, None in
-      mk_qmkpair ty1 ty2 (create_derivation g dbmap prior_derivs fuel false ty1 v1) (create_derivation g dbmap prior_derivs fuel false ty2 v2)
+      mk_qmkpair ty1 ty2 (create_derivation g dbmap prior_derivs false ty1 v1) (create_derivation g dbmap prior_derivs false ty2 v2)
     | Some "FStar.Pervasives.Native.fst", [v1] ->
-      mk_qfst (create_derivation g dbmap prior_derivs fuel false None v1)
+      mk_qfst (create_derivation g dbmap prior_derivs false None v1)
     | Some "FStar.Pervasives.Native.snd", [v1] ->
-      mk_qsnd (create_derivation g dbmap prior_derivs fuel false None v1)
+      mk_qsnd (create_derivation g dbmap prior_derivs false None v1)
     | Some "FStar.Pervasives.Inl", [v1] ->
       let branches_ty = match fstar_ty with
         | Some ty -> either_branch_types_of_ty ty
@@ -434,7 +403,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let inner_ty = match branches_ty with
         | Some (a, _) -> Some a
         | None -> None in
-      let inner = create_derivation g dbmap prior_derivs fuel false inner_ty v1 in
+      let inner = create_derivation g dbmap prior_derivs false inner_ty v1 in
       (match branches_ty with
        | Some (a, b) -> mk_qinl_explicit (typ_translation a None) (typ_translation b None) inner_ty inner
        | None -> mk_qinl inner)
@@ -445,7 +414,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let inner_ty = match branches_ty with
         | Some (_, b) -> Some b
         | None -> None in
-      let inner = create_derivation g dbmap prior_derivs fuel false inner_ty v1 in
+      let inner = create_derivation g dbmap prior_derivs false inner_ty v1 in
       (match branches_ty with
        | Some (a, b) -> mk_qinr_explicit (typ_translation a None) (typ_translation b None) inner_ty inner
        | None -> mk_qinr inner)
@@ -453,50 +422,50 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let v_ty = match fstar_ty with
         | Some t -> strip_io t
         | None -> None in
-      mk_qreturn v_ty (create_derivation g dbmap prior_derivs fuel false v_ty v)
+      mk_qreturn v_ty (create_derivation g dbmap prior_derivs false v_ty v)
     | Some "IOStar.return", [v] ->
       let v_ty = match fstar_ty with
         | Some t -> strip_io t
         | None -> None in
-      mk_qreturn v_ty (create_derivation g dbmap prior_derivs fuel false v_ty v)
+      mk_qreturn v_ty (create_derivation g dbmap prior_derivs false v_ty v)
     | Some "IOStar.io_call", [op; v] ->
-      mk_qcall op (create_derivation g dbmap prior_derivs fuel false None v)
+      mk_qcall op (create_derivation g dbmap prior_derivs false None v)
     | Some "IOStar.op_let_Bang_At", [m; k]
     | Some "IOStar.io_bind", [m; k] -> begin
-      let qm = create_derivation g dbmap prior_derivs fuel true None m in
+      let qm = create_derivation g dbmap prior_derivs true None m in
       match inspect_ln k with
       | Tv_Abs bin body ->
         (** Continuation [k : a -> io b] has the same outer io result type as the
             whole [io_bind], so propagate [fstar_ty] into the body. *)
-        let qk = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel true fstar_ty body in
+        let qk = create_derivation g (extend_dbmap_binder dbmap) prior_derivs true fstar_ty body in
         mk_qbind qm qk
       | _ -> fail "IOStar.io_bind continuation is not a lambda"
     end
     | Some "ExamplesIO.eq_string", [v1; v2] -> // TODO: Move eq_string in IOStar.fst.
-      mk_qeq_string (create_derivation g dbmap prior_derivs fuel false None v1) (create_derivation g dbmap prior_derivs fuel false None v2)
+      mk_qeq_string (create_derivation g dbmap prior_derivs false None v1) (create_derivation g dbmap prior_derivs false None v2)
     | Some "IOStar.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
           Translates to: QBind m (QCaseIO QAxiom (k_body) (QReturn (QInr QAxiom)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
           So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
-      let qm = create_derivation g dbmap prior_derivs fuel true None m in
+      let qm = create_derivation g dbmap prior_derivs true None m in
       match inspect_ln k with
       | Tv_Abs bin body ->
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
-        let qk_body = create_derivation g dbmap' prior_derivs fuel true fstar_ty body in
+        let qk_body = create_derivation g dbmap' prior_derivs true fstar_ty body in
         mk_qletioex_explicit qm qk_body
       | _ -> fail "IOStar.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f]
     | Some "IOStar.io_nrec", [n; base; f] ->
       mk_qnrec
-        (create_derivation g dbmap prior_derivs fuel false (Some (`nat)) n)
-        (create_derivation g dbmap prior_derivs fuel false fstar_ty base)
-        (create_derivation g dbmap prior_derivs fuel false None f)
+        (create_derivation g dbmap prior_derivs false (Some (`nat)) n)
+        (create_derivation g dbmap prior_derivs false fstar_ty base)
+        (create_derivation g dbmap prior_derivs false None f)
     | Some "Prims.op_Addition", [v1; v2] ->
       (match inspect_ln v2 with
        | Tv_Const (C_Int 1) ->
-         mk_qsucc (create_derivation g dbmap prior_derivs fuel false fstar_ty v1)
+         mk_qsucc (create_derivation g dbmap prior_derivs false fstar_ty v1)
        | _ -> fail "only n + 1 (successor) is supported for nat addition")
     | _ ->
       (** The head's F* type tells us the argument's expected (refined) domain.
@@ -513,10 +482,10 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       let hd_ty =
         match hd_view with
         | Tv_BVar v -> Some (unseal (inspect_bv v).sort)
-        | _ ->
-          (match tc_term g hd with
-           | Some (_, (_, ty)), _ -> Some ty
-           | _ -> None)
+        | _ -> None
+ //         (print ("PROBE_TC_APPHEAD " ^ tag_of hd); match tc_term g hd with
+ //          | Some (_, (_, ty)), _ -> Some ty
+ //          | _ -> None)
       in
       let arg_fstar_ty =
         match hd_ty with
@@ -538,9 +507,9 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
           whereas wrapping an unfolded [QLambda] (from an fvar) would leave [#a]
           an unsolved uvar. *)
       let fun_is_bvar = (match hd_view with | Tv_BVar _ -> true | _ -> false) in
-      let f0 = create_derivation g dbmap prior_derivs fuel false None hd in
+      let f0 = create_derivation g dbmap prior_derivs false None hd in
       let f = if fun_is_bvar then mk_qerase_ref f0 else f0 in
-      let x = (create_derivation g dbmap prior_derivs fuel false arg_fstar_ty a) in
+      let x = (create_derivation g dbmap prior_derivs false arg_fstar_ty a) in
       if is_comp then mk_qappcomp f x
       else mk_qapp arg_fstar_ty f x
   end
@@ -559,18 +528,18 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     // print_debug ("Got: " ^ (branches_to_string brs));
     match brs with
     | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
-      let qb = create_derivation g dbmap prior_derivs fuel false None b in
-      let qt1 = create_derivation g dbmap prior_derivs fuel is_comp fstar_ty t1 in
-      let qt2 = create_derivation g (skip_dbmap_binder dbmap) prior_derivs fuel is_comp fstar_ty t2 in
+      let qb = create_derivation g dbmap prior_derivs false None b in
+      let qt1 = create_derivation g dbmap prior_derivs is_comp fstar_ty t1 in
+      let qt2 = create_derivation g (skip_dbmap_binder dbmap) prior_derivs is_comp fstar_ty t2 in
       if is_comp then mk_qifcomp qb qt1 qt2
       else mk_qif qb qt1 qt2
 
     | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
       let fnm1 = fv_to_string fv1 in
       if fnm1 = "FStar.Pervasives.Inl" then
-        let qb = create_derivation g dbmap prior_derivs fuel false None b in
-        let qt1 = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel is_comp fstar_ty t1 in
-        let qt2 = create_derivation g (extend_dbmap_binder dbmap) prior_derivs fuel is_comp fstar_ty t2 in
+        let qb = create_derivation g dbmap prior_derivs false None b in
+        let qt1 = create_derivation g (extend_dbmap_binder dbmap) prior_derivs is_comp fstar_ty t1 in
+        let qt2 = create_derivation g (extend_dbmap_binder dbmap) prior_derivs is_comp fstar_ty t2 in
         if is_comp then mk_qcasecomp qb qt1 qt2
         else mk_qcase qb qt1 qt2
       else fail ("only supporting matches on inl and inr for now (in this order). Got: " ^ fnm1)
@@ -579,37 +548,11 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
-    | C_Total _ -> create_derivation g dbmap prior_derivs fuel is_comp fstar_ty t
+    | C_Total _ -> create_derivation g dbmap prior_derivs is_comp fstar_ty t
     | _ -> fail ("not a total function type")
   end
 
-  | Tv_AscribedT e t _ _ -> create_derivation g dbmap prior_derivs fuel is_comp fstar_ty e
-
-  | Tv_UInst fv _ -> begin
-    let fnm = fv_to_string fv in
-    match List.Tot.assoc fnm prior_derivs with
-    | Some cached ->
-      print_debug ("        reusing prior derivation for: " ^ fnm);
-      cached
-    | None -> begin
-      print_debug ("        looking for uinst fvar: " ^ fnm);
-      let fstar_ty = match fstar_ty with
-        | Some _ -> fstar_ty
-        | None -> match tc_term g qfs with
-          | Some (_, (_, ty)), _ -> Some ty
-          | _ -> None
-      in
-      let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
-      match inspect_ln qfs' with
-      | Tv_FVar fv' ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap prior_derivs (fuel - 1) is_comp fstar_ty qfs'
-      | Tv_UInst fv' _ ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap prior_derivs (fuel - 1) is_comp fstar_ty qfs'
-      | _ -> create_derivation g dbmap prior_derivs (fuel - 1) is_comp fstar_ty qfs'
-    end
-  end
+  | Tv_AscribedT e t _ _ -> create_derivation g dbmap prior_derivs is_comp fstar_ty e
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
@@ -676,7 +619,6 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
   go l qderivation 0
 
 let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  set_guard_policy Goal;
   print_debug ("DEBUG: entering type_check_derivation");
   let t0 = curms () in
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
@@ -698,6 +640,7 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   // print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
   let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; iota] desired_qtyp in
   print_debug ("DEBUG: before core_check_term");
+  set_guard_policy Goal;
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
   let t1 = curms () in
   print ("  done core_check_term " ^ string_of_int (t1 - t0) ^ "ms");
@@ -714,17 +657,13 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   token_as_typing g qderivation E_Total desired_qtyp;
   (qderivation, desired_qtyp)
 
-let initial_unfold_fuel : int = 32
-
 let create_and_type_check_derivation (nm:string) g (dbmap:db_mapping) (prior_derivs:prior_derivations) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-  let unfold_names = match get_fv qprog with
-    | Some nm -> [nm]
-    | None -> []
-  in
+  let unfold_names = match get_fv qprog with | Some nm -> [nm] | None -> [] in
   let desired_qtyp_inner = typ_translation qtyp None in
   let desired_qtyp = mk_ptyj desired_qtyp_inner qprog in
-  let open_qderivation = mk_qref_oty (Some qtyp) (create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog) in
+  let qprog = norm_term_env g [delta_only unfold_names] qprog in
+  let open_qderivation = mk_qref_oty (Some qtyp) (create_derivation g dbmap prior_derivs false (Some qtyp) qprog) in
   let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation nm g qderivation desired_qtyp unfold_names
 
@@ -750,20 +689,6 @@ let mk_checked_opaque_let
   sigelt_typing_preserves g se (Some ty) attrs quals;
   (b, se', blob)
 
-let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
-  set_guard_policy Force;
-  match expected_t with
-  | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
-  | None -> begin
-    let t0 = curms () in
-    print ("SPLICE_BEGIN " ^ nm);
-    let (qderivation, qtyp_derivation) = create_and_type_check_derivation nm g empty_mapping [] qprog in
-    let t1 = curms () in
-    print ("SPLICE_END " ^ nm ^ " " ^ string_of_int (t1 - t0) ^ "ms");
-    let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
-    ([], se_for, [])
-  end
-
 (** Generate a derivation for a program, reusing already-generated derivations.
 
     `deps` is a list of (source_program, derivation) pairs where:
@@ -788,6 +713,7 @@ let use_deriv (deriv:term) : term =
       (mk_app deriv [(pack_ln Tv_Unknown, Q_Explicit)], Q_Explicit)] // the g_env argument will be filled in by the caller's context
 
 let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & term)) : dsl_tac_t = fun (g, expected_t) ->
+  set_guard_policy Force;
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
@@ -803,3 +729,6 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     let se_for = mk_checked_opaque_let g (cur_module ()) nm qderivation qtyp_derivation in
     ([], se_for, [])
   end
+
+let generate_derivation (nm:string) (qprog:term) : dsl_tac_t =
+  generate_derivation_using nm qprog []
