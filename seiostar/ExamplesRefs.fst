@@ -66,6 +66,16 @@ let fun_beh_ref
   : (f:(b:bool{b == true} -> bool){forall (b:bool{b == true}). f b == b})
   = fun b -> true
 
+let refined_pair_inner
+  : (x:bool) -> ((x:bool{x == true}) & y:bool{y == false})
+  = fun x ->
+  if x then (x, false) else (true, false)
+
+let refined_pair
+  : (x:bool) -> p:(bool & bool){fst p == true /\ snd p == false}
+  = fun x ->
+  if x then (x, false) else (true, false)
+
 assume val valid : string -> Type0
 
 let ret_refined_arg : (x:string{valid x}) -> (x:string{valid x}) = fun x -> x

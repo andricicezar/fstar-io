@@ -29,6 +29,10 @@ open ExamplesRefs
 // (`%needs_true, `tgt_needs_true)
 //])
 
+%splice_t[tgt_refined_pair_inner] (generate_derivation "tgt_refined_pair_inner" (`refined_pair_inner))
+
+%splice_t[tgt_refined_pair] (generate_derivation "tgt_refined_pair" (`refined_pair))
+
 %splice_t[tgt_fun_beh_ref] (generate_derivation "tgt_fun_beh_ref" (`fun_beh_ref))
 %splice_t[tgt_ret_refined_arg] (generate_derivation "tgt_ret_refined_arg" (`ret_refined_arg))
 %splice_t[tgt_inl_refined_arg] (generate_derivation "tgt_inl_refined_arg" (`inl_refined_arg))
