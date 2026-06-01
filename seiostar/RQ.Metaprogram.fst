@@ -465,20 +465,18 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     | _ ->
       (** The head's F* type tells us the argument's expected (refined) domain.
           For a *bound variable* the metaprogram never pushes the lambda binders
-          into the reflection env [g] (it tracks them via [dbmap]), so [tc_term g
-          hd] fails; recover the type from the bound variable's own [sort]
-          instead. This is essential for higher-order functions like
-          [f:(x:t{P x} -> u)] applied as [f x]: without it [arg_fstar_ty] is
+          into the reflection env [g] (it tracks them via [dbmap]), so its type is
+          recovered from the bound variable's own [sort]; for a *top-level* head
+          it is read from the environment with [lookup_typ] (see
+          [head_fstar_type]). This is essential for refined domains like
+          [f:(x:t{P x} -> u)] applied as [f x] (or a top-level
+          [needs_true : b:bool{b==true} -> _]): without it [arg_fstar_ty] is
           [None], the argument is wrapped with a trivial [QRef] (its [#ref]
-          defaulting to [trivial_ref0]), and [QApp]'s [#a] is pinned to the
-          trivial domain -- clashing with [f]'s refined domain and leaving the
-          remaining implicits unsolved. *)
+          defaulting to [trivial_ref0], i.e. [fun _ -> True]), and [QApp]'s [#a]
+          is pinned to the trivial domain -- clashing with the head's refined
+          domain and leaving the remaining implicits unsolved. *)
       let hd_view = inspect_ln hd in
-      let hd_ty =
-        match hd_view with
-        | Tv_BVar v -> Some (unseal (inspect_bv v).sort)
-        | _ -> None
-      in
+      let hd_ty = head_fstar_type g hd in
       let arg_fstar_ty =
         match hd_ty with
         | Some ty ->
@@ -642,8 +640,15 @@ let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (
   (qderivation, desired_qtyp)
 
 let create_and_type_check_derivation (nm:string) g (dbmap:db_mapping) (prior_derivs:prior_derivations) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-  let unfold_names = match get_fv qprog with | Some nm -> [nm] | None -> [] in
+  (** [qprog] is assumed to be a top-level definition: get its name, then look
+      up its declared (refined) F* type in the environment. *)
+  let prog_name = match fv_name_of_term qprog with
+    | Some n -> n
+    | None -> fail (term_to_string qprog ^ " is not a top-level definition") in
+  let qtyp = match lookup_fstar_type g prog_name with
+    | Some t -> t
+    | None -> fail ("could not find the F* type of " ^ term_to_string qprog) in
+  let unfold_names = [implode_qn prog_name] in
   let desired_qtyp_inner = typ_translation qtyp None in
   let desired_qtyp = mk_ptyj desired_qtyp_inner qprog in
   let qprog = norm_term_env g [delta_only unfold_names] qprog in

@@ -100,6 +100,52 @@ let get_fv (head:term) : option string =
   | Tv_UInst fv _ -> Some (fv_to_string fv)
   | _ -> None
 
+(** Extract the fully-qualified name of a top-level definition referenced by a
+    term (an [FVar]/[UInst]). *)
+let fv_name_of_term (t:term) : option name =
+  match inspect_ln t with
+  | Tv_FVar fv | Tv_UInst fv _ -> Some (inspect_fv fv)
+  | _ -> None
+
+(** Read the declared (possibly refined) F* type of a top-level symbol out of
+    the environment [g] with [lookup_typ] (we do NOT re-typecheck anything). *)
+let lookup_fstar_type (g:env) (nm:name) : option typ =
+  match lookup_typ g nm with
+  | Some se ->
+    (match FStar.Stubs.Reflection.V2.Builtins.inspect_sigelt se with
+     | FStar.Stubs.Reflection.V2.Data.Sg_Val _ _ ty -> Some ty
+     | FStar.Stubs.Reflection.V2.Data.Sg_Let _ lbs ->
+       let rec find (ls:list FStar.Stubs.Reflection.Types.letbinding) : option typ =
+         match ls with
+         | [] -> None
+         | lb :: rest ->
+           let lbv = FStar.Stubs.Reflection.V2.Builtins.inspect_lb lb in
+           if inspect_fv lbv.lb_fv = nm then Some lbv.lb_typ
+           else find rest
+       in
+       find lbs
+     | _ -> None)
+  | None -> None
+
+(** Recover the (possibly refined) declared F* type of a term that is either a
+    bound variable or a top-level name. For a bound variable the metaprogram
+    never pushes binders into the reflection env, so its type comes from its own
+    [sort]; for a top-level (closed) name the declared type is read out of the
+    environment [g] (see [lookup_fstar_type]). Used both to thread an application
+    head's refined domain onto its argument (otherwise the argument's refinement
+    defaults to [trivial_ref0], i.e. [fun _ -> True]) and to obtain the type of
+    the top-level program being derived.
+
+    The [Tac] effect is needed solely for [unseal] in the bound-variable case
+    (the binder's [sort] is a [sealed typ]); the top-level lookup is pure. *)
+let head_fstar_type (g:env) (hd:term) : Tac (option typ) =
+  match inspect_ln hd with
+  | Tv_BVar v -> Some (unseal (inspect_bv v).sort)
+  | _ ->
+    (match fv_name_of_term hd with
+     | Some nm -> lookup_fstar_type g nm
+     | None -> None)
+
 let rec print_nat (n:nat) : string =
   match n with
   | 0 -> "0"

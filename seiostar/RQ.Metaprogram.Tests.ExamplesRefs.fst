@@ -25,9 +25,9 @@ open ExamplesRefs
 %splice_t[tgt_context] (generate_derivation "tgt_context" (`context))
 
 %splice_t[tgt_needs_true] (generate_derivation "tgt_needs_true" (`needs_true))
-//%splice_t[tgt_proj_into_refined] (generate_derivation_using "tgt_proj_into_refined" (`proj_into_refined) [
-// (`%needs_true, `tgt_needs_true)
-//])
+%splice_t[tgt_proj_into_refined] (generate_derivation_using "tgt_proj_into_refined" (`proj_into_refined) [
+ (`%needs_true, `tgt_needs_true)
+])
 
 %splice_t[tgt_refined_pair_inner] (generate_derivation "tgt_refined_pair_inner" (`refined_pair_inner))
 
