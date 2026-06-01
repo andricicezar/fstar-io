@@ -4,6 +4,10 @@ open FStar.Tactics.V1
 
 include Trace
 
+val eq_string : string -> string -> bool
+let eq_string s t =
+  s = t
+
 (** Computational Monad **)
 
 noeq
@@ -36,7 +40,7 @@ unfold let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
   | Inl x -> k x
   | Inr x -> io_return (Inr x)
-  
+
 let rec io_nrec (#a:Type) (n:nat) (b:a) (f:a -> a) : a =
   if n = 0 then b else io_nrec (n-1) (f b) f
 

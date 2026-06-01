@@ -349,7 +349,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     | Some cached ->
       print_debug ("        reusing prior derivation for: " ^ fnm);
       cached
-    | None -> fail ("Derivation of " ^ fnm ^ " not found.")
+    | None -> fail ("Error: Derivation of " ^ fnm ^ " not found.")
   end
 
   | Tv_BVar v -> begin
@@ -437,7 +437,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         mk_qbind qm qk
       | _ -> fail "IOStar.io_bind continuation is not a lambda"
     end
-    | Some "ExamplesIO.eq_string", [v1; v2] -> // TODO: Move eq_string in IOStar.fst.
+    | Some "IOStar.eq_string", [v1; v2] ->
       mk_qeq_string (create_derivation g dbmap prior_derivs false None v1) (create_derivation g dbmap prior_derivs false None v2)
     | Some "IOStar.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
@@ -452,7 +452,6 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         mk_qletioex_explicit qm qk_body
       | _ -> fail "IOStar.op_let_Bang_At_Bang continuation is not a lambda"
     end
-    | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f]
     | Some "IOStar.io_nrec", [n; base; f] ->
       mk_qnrec
         (create_derivation g dbmap prior_derivs false (Some (`nat)) n)
@@ -479,9 +478,6 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         match hd_view with
         | Tv_BVar v -> Some (unseal (inspect_bv v).sort)
         | _ -> None
- //         (print ("PROBE_TC_APPHEAD " ^ tag_of hd); match tc_term g hd with
- //          | Some (_, (_, ty)), _ -> Some ty
- //          | _ -> None)
       in
       let arg_fstar_ty =
         match hd_ty with
@@ -672,7 +668,7 @@ let mk_checked_opaque_let
   : sigelt_for g (Some ty) =
   let (b, se, blob) = mk_checked_let g cur_module nm tm ty in
   let attrs = [(`("opaque_to_smt"))] in
-  let quals = [Irreducible] in
+  let quals = [] in
   let se' = set_sigelt_quals quals (set_sigelt_attrs attrs se) in
   sigelt_typing_preserves g se (Some ty) attrs quals;
   (b, se', blob)

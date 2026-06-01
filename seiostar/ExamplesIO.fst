@@ -62,10 +62,6 @@ let open2_read_write () =
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
 
-val eq_string : string -> string -> bool
-let eq_string s t =
-  s = t
-
 let echo (fd1 fd2:file_descr) =
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
