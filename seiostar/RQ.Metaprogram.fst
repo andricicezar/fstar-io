@@ -57,26 +57,21 @@ let mk_qsum (t1 t2:term) (oref:option term): term =
   | None -> mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
   | Some ref -> mk_app (`QTypes.qSumR) [(t1, Q_Explicit); (t2, Q_Explicit); (ref, Q_Explicit)]
 
-(** Collect every refinement layer of a (possibly synonym-folded, possibly
-    nested) base type into the innermost binder plus the conjunction of all
-    predicates. For [(x:t{A}){B}] each layer's predicate is open over de Bruijn
-    index 0 (its own bound variable); across layers they all refer to the same
-    logical variable at index 0, so they can be conjoined directly without any
-    shifting. Type synonyms (e.g. [int64 = x:nat{x <= 10}]) are unfolded so their
-    refinements are not lost. Predicates are conjoined innermost-first
-    ([inner /\ outer]) so the synthesized refinement matches the order in which
-    F* builds the desired refinement VC; otherwise the resulting [P ==> Q]
-    obligation is a mere permutation that [simplify] cannot collapse to [True]
-    (and [prove_equality] has no SMT fallback). Returns [None] for arrows /
-    unrefined base types. *)
-let rec collect_ref_layers (ty:typ)
-  : Tac (option (FStar.Stubs.Reflection.Types.binder & term)) =
+(** Collect the refinement predicates of a (possibly synonym-folded, possibly
+    nested) base type, returning the innermost binder plus the list of layer
+    predicates in innermost-to-outermost order. For [(x:t{A}){B}] each layer's
+    predicate is open over de Bruijn index 0 (its own bound variable); across
+    layers they all refer to the same logical variable at index 0, so they can be
+    conjoined directly without any shifting. Type synonyms (e.g.
+    [int64 = x:nat{x <= 10}]) are unfolded so their refinements are not lost.
+    Returns [None] for arrows / unrefined base types. *)
+let rec collect_ref_preds (ty:typ)
+  : Tac (option (FStar.Stubs.Reflection.Types.binder & list term)) =
   match inspect_ln ty with
   | Tv_Refine b ref ->
-    (match collect_ref_layers (inspect_binder b).sort with
-     | None -> Some (b, ref)
-     | Some (inner_b, inner_pred) ->
-       Some (inner_b, mk_app (`Prims.l_and) [(inner_pred, Q_Explicit); (ref, Q_Explicit)]))
+    (match collect_ref_preds (inspect_binder b).sort with
+     | None -> Some (b, [ref])
+     | Some (inner_b, inner_preds) -> Some (inner_b, inner_preds `List.Tot.append` [ref]))
   | Tv_FVar fv ->
     (** Do not unfold the primitive base types that [typ_translation] handles
         specially (e.g. [nat = x:int{x>=0}]): unfolding them would inject a
@@ -88,9 +83,31 @@ let rec collect_ref_layers (ty:typ)
      | "Prims.nat" | "Prims.int" | "Trace.file_descr" -> None
      | _ ->
        (match try_to_unfold_fv (fv_to_string fv) ty with
-        | Some ty' -> collect_ref_layers ty'
+        | Some ty' -> collect_ref_preds ty'
         | None -> None))
   | _ -> None
+
+(** Conjoin a non-empty list of predicates into a single [l_and] term. The
+    accumulator folds left, so [[p0; p1; p2]] becomes [((p0 /\ p1) /\ p2)];
+    switching to [fold_right] would flip the associativity. Predicates are
+    conjoined innermost-first so the synthesized refinement matches the order in
+    which F* builds the desired refinement VC; otherwise the resulting [P ==> Q]
+    obligation is a mere permutation that [simplify] cannot collapse to [True]
+    (and [prove_equality] has no SMT fallback). *)
+let join_ref_preds (p0:term) (ps:list term) : term =
+  List.Tot.fold_left
+    (fun acc r -> mk_app (`Prims.l_and) [(acc, Q_Explicit); (r, Q_Explicit)])
+    p0 ps
+
+(** Collect every refinement layer of a base type into the innermost binder plus
+    the conjunction of all predicates. Thin wrapper over [collect_ref_preds] that
+    joins the gathered predicates with [join_ref_preds]. *)
+let collect_ref_layers (ty:typ)
+  : Tac (option (FStar.Stubs.Reflection.Types.binder & term)) =
+  match collect_ref_preds ty with
+  | None -> None
+  | Some (_, []) -> None
+  | Some (inner_b, p0 :: ps) -> Some (inner_b, join_ref_preds p0 ps)
 
 (** Build the closed refinement predicate [fun x -> conj] for a refined base
     type, unfolding synonyms and conjoining nested refinements via
@@ -611,6 +628,50 @@ let unwrap_deriv (#g:typ_env) (#a:qType) (#x:fs_val a) (p:packed_turnstile_g g a
   : g ⊢ fs_oval_helper_g g x (dfst p)
   = dsnd p
 
+(** Discharge the residual goal left by [core_check_term] when relating the
+    synthesized derivation to its desired qType. After normalization this goal is
+    a conjunction of (a) the function-value behavior equality (closed by [trefl])
+    and (b) refinement-subtyping tautologies of the form [forall .. P ==> P']
+    where [P] and [P'] are the same predicate built with a different [/\]
+    association (e.g. a refined function domain appearing on both sides). We
+    decompose conjunctions/quantifiers/implications syntactically; only the
+    irreducible arithmetic leaves -- which by then mention no higher-order
+    variables -- fall through to [smt], so the precision loss on function
+    literals never bites. *)
+(** Discharge the residual goal left by [core_check_term] when relating the
+    synthesized derivation to its desired qType. After normalization this goal is
+    a conjunction whose leaves are either the function-value behavior equality
+    (closed by [trefl]) or refinement tautologies [forall .. P ==> P'] where [P]
+    and [P'] are the same atoms in a different [/\] association (a refined
+    function domain reconstructed via [qNatR] vs. F*'s native flattening of the
+    nested source refinement). We decompose conjunctions/quantifiers and, on an
+    implication, break the hypothesis conjunction into atomic facts so the
+    consequent's atoms each close by [assumption] regardless of how either side
+    is associated -- no SMT required. *)
+let rec destruct_and_hyp (fuel:nat) (h:term) : Tac unit =
+  if fuel = 0 then ()
+  else
+    or_else
+      (fun () ->
+        let (l, r) = destruct_and h in
+        destruct_and_hyp (fuel - 1) (binding_to_term l);
+        destruct_and_hyp (fuel - 1) (binding_to_term r))
+      (fun () -> ())
+
+let rec solve_eq_goal (fuel:nat) : Tac unit =
+  if fuel = 0 then or_else trivial trefl
+  else
+    first [
+      trivial;
+      trefl;
+      assumption;
+      (fun () -> split (); solve_eq_goal (fuel - 1); solve_eq_goal (fuel - 1));
+      (fun () -> let _ = forall_intro () in solve_eq_goal (fuel - 1));
+      (fun () -> let h = implies_intro () in
+                 destruct_and_hyp fuel (binding_to_term h);
+                 solve_eq_goal (fuel - 1));
+    ]
+
 let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
   ignore (repeat forall_intro);
   norm [delta_only qType_defs_list;
@@ -623,7 +684,7 @@ let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
   dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
   print ("PROVE_EQ_DUMP_END " ^ nm);
   or_else
-    (fun () -> or_else trivial trefl)
+    (fun () -> solve_eq_goal 50)
     (fun () -> dump "RQ's unification failed"; fail "RQ's unification failed")
 
 (** Fill any remaining implicit (from [instantiate_implicits]) of type [X -> Type0]
@@ -657,7 +718,7 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
 let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   print_debug ("DEBUG: entering type_check_derivation");
   let t0 = curms () in
-  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  print ("DEBUG: deriv = " ^ term_to_string qderivation);
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) false in
   let t1 = curms () in
   print ("  done instantiating implicits, " ^ string_of_int (List.length l) ^ " left, " ^ string_of_int (t1 - t0) ^ "ms");
