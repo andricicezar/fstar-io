@@ -9,6 +9,8 @@ open QTypes.HelperTactics
 
 open ExamplesRefs
 
+%splice_t[tgt_incr_int64] (generate_derivation "tgt_incr_int64" (`incr_int64))
+
 %splice_t[tgt_refbool] (generate_derivation "tgt_refbool" (`refbool))
 %splice_t[tgt_falsepre] (generate_derivation "tgt_falsepre" (`falsepre))
 %splice_t[tgt_just_true] (generate_derivation "tgt_just_true" (`just_true))

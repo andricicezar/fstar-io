@@ -30,7 +30,10 @@ let mk_qfiledescr (oref:option term) : term =
   match oref with
   | None -> mk_app (`QTypes.qFileDescr) []
   | Some ref -> mk_app (`QTypes.qFileDescrR) [(ref, Q_Explicit)]
-let mk_qnat : term = mk_app (`QTypes.qNat) []
+let mk_qnat (oref:option term) : term =
+  match oref with
+  | None -> mk_app (`QTypes.qNat) []
+  | Some ref -> mk_app (`QTypes.qNatR) [(ref, Q_Explicit)]
 
 let mk_qstring (oref:option term) : term =
   match oref with
@@ -54,6 +57,60 @@ let mk_qsum (t1 t2:term) (oref:option term): term =
   | None -> mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
   | Some ref -> mk_app (`QTypes.qSumR) [(t1, Q_Explicit); (t2, Q_Explicit); (ref, Q_Explicit)]
 
+(** Collect every refinement layer of a (possibly synonym-folded, possibly
+    nested) base type into the innermost binder plus the conjunction of all
+    predicates. For [(x:t{A}){B}] each layer's predicate is open over de Bruijn
+    index 0 (its own bound variable); across layers they all refer to the same
+    logical variable at index 0, so they can be conjoined directly without any
+    shifting. Type synonyms (e.g. [int64 = x:nat{x <= 10}]) are unfolded so their
+    refinements are not lost. Predicates are conjoined innermost-first
+    ([inner /\ outer]) so the synthesized refinement matches the order in which
+    F* builds the desired refinement VC; otherwise the resulting [P ==> Q]
+    obligation is a mere permutation that [simplify] cannot collapse to [True]
+    (and [prove_equality] has no SMT fallback). Returns [None] for arrows /
+    unrefined base types. *)
+let rec collect_ref_layers (ty:typ)
+  : Tac (option (FStar.Stubs.Reflection.Types.binder & term)) =
+  match inspect_ln ty with
+  | Tv_Refine b ref ->
+    (match collect_ref_layers (inspect_binder b).sort with
+     | None -> Some (b, ref)
+     | Some (inner_b, inner_pred) ->
+       Some (inner_b, mk_app (`Prims.l_and) [(inner_pred, Q_Explicit); (ref, Q_Explicit)]))
+  | Tv_FVar fv ->
+    (** Do not unfold the primitive base types that [typ_translation] handles
+        specially (e.g. [nat = x:int{x>=0}]): unfolding them would inject a
+        redundant refinement (and change the base type from [nat] to [int]),
+        making otherwise-identical refinements compare as arithmetic implications
+        instead of matching syntactically. Only user-defined synonyms unfold. *)
+    (match fv_to_string fv with
+     | "Prims.unit" | "Prims.bool" | "Prims.string"
+     | "Prims.nat" | "Prims.int" | "Trace.file_descr" -> None
+     | _ ->
+       (match try_to_unfold_fv (fv_to_string fv) ty with
+        | Some ty' -> collect_ref_layers ty'
+        | None -> None))
+  | _ -> None
+
+(** Build the closed refinement predicate [fun x -> conj] for a refined base
+    type, unfolding synonyms and conjoining nested refinements via
+    [collect_ref_layers]. The lambda is re-elaborated so it gets a residual
+    computation type (otherwise the SMT encoding warns about an unannotated
+    abstraction). Returns [None] when there is no refinement to attach. *)
+let refinement_lam_of_ty (ty:typ) : Tac (option term) =
+  match collect_ref_layers ty with
+  | None -> None
+  | Some (inner_b, pred) ->
+    let lam = pack_ln (Tv_Abs inner_b pred) in
+    let env = top_env () in
+    let (tc_res, _) = tc_term env lam in
+    let lam =
+      match tc_res with
+      | Some r -> let (lam', _) = r in lam'
+      | None -> lam
+    in
+    Some lam
+
 let rec typ_translation (qt:term) (oref:option term) : Tac term =
   match inspect_ln qt with
   | Tv_FVar fv -> begin
@@ -61,10 +118,14 @@ let rec typ_translation (qt:term) (oref:option term) : Tac term =
     | "Prims.unit" -> mk_qunit oref
     | "Prims.bool" -> mk_qbool oref
     | "Prims.string" -> mk_qstring oref
-    | "Prims.nat" -> mk_qnat
+    | "Prims.nat" -> mk_qnat oref
     | "Trace.file_descr" -> mk_qfiledescr oref
-    | "Prims.int" -> mk_qnat
-    | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
+    | "Prims.int" -> mk_qnat oref
+    | nfv -> begin
+      match try_to_unfold_fv nfv qt with
+      | Some qt -> typ_translation qt oref
+      | None -> fail ("Type " ^ nfv ^ " not supported")
+    end
   end
 
   | Tv_App l (r, _) -> begin
@@ -103,19 +164,21 @@ let rec typ_translation (qt:term) (oref:option term) : Tac term =
   end
 
   (** erase refinement **)
-  | Tv_Refine b ref ->
-    let bv = inspect_binder b in
-    let lam = pack_ln (Tv_Abs b ref) in
-    (** Re-elaborate the lambda so it gets a residual computation type;
-        otherwise the SMT encoding warns with "Unannotated abstraction". *)
-    let env = top_env () in
-    let (tc_res, _) = tc_term env lam in
-    let lam =
-      match tc_res with
-      | Some r -> let (lam', _) = r in lam'
-      | None -> lam
-    in
-    typ_translation bv.sort (Some lam)
+  | Tv_Refine _ _ ->
+    (match collect_ref_layers qt with
+     | Some (inner_b, pred) ->
+       let lam = pack_ln (Tv_Abs inner_b pred) in
+       (** Re-elaborate the lambda so it gets a residual computation type;
+           otherwise the SMT encoding warns with "Unannotated abstraction". *)
+       let env = top_env () in
+       let (tc_res, _) = tc_term env lam in
+       let lam =
+         match tc_res with
+         | Some r -> let (lam', _) = r in lam'
+         | None -> lam
+       in
+       typ_translation (inspect_binder inner_b).sort (Some lam)
+     | None -> fail "unexpected: Tv_Refine collected no refinement layers")
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
@@ -232,13 +295,9 @@ let mk_qref_oty (oty:option typ) (x:term) : Tac term =
     (match v with
      | Tv_Arrow _ _ -> mk_qref_typed (typ_translation stripped None) x
      | _ ->
-       (match inspect_ln ty with
-        | Tv_Refine b phi ->
-          let s = (inspect_binder b).sort in
-          (match inspect_ln s with
-           | Tv_Refine _ _ -> mk_qref x
-           | _ -> mk_qref_refined (pack_ln (Tv_Abs b phi)) x)
-        | _ -> mk_qref x))
+       (match refinement_lam_of_ty ty with
+        | Some lam -> mk_qref_refined lam x
+        | None -> mk_qref x))
   | None -> mk_qref x
 
 let mk_qtt : term = mk_app (`Qtt) []
@@ -460,7 +519,12 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     | Some "Prims.op_Addition", [v1; v2] ->
       (match inspect_ln v2 with
        | Tv_Const (C_Int 1) ->
-         mk_qsucc (create_derivation g dbmap prior_derivs false fstar_ty v1)
+         (** [QSucc]'s operand rule hardcodes [qNat], so erase any refinement the
+             operand might carry (e.g. a refined lambda argument [p:nat{p+1<=10}]).
+             Otherwise [QSucc] pins the operand's qType -- and hence the enclosing
+             [QLambda]'s domain -- to the trivial [qNat], dropping the domain
+             refinement that the desired arrow type requires. *)
+         mk_qsucc (mk_qerase_ref (create_derivation g dbmap prior_derivs false None v1))
        | _ -> fail "only n + 1 (successor) is supported for nat addition")
     | _ ->
       (** The head's F* type tells us the argument's expected (refined) domain.

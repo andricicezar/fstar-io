@@ -192,3 +192,11 @@ let branches_to_string (brs:list branch) : Tac string =
   FStar.Tactics.Util.fold_left (fun acc b -> acc ^ (branch_to_string b) ^ "; ") "" brs
 
 let unk = pack_ln Tv_Unknown
+
+let try_to_unfold_fv nfv (qt:term) : Tac (option term) =
+  let qt' = norm_term_env (top_env ()) [delta_only [nfv]; zeta] qt in
+  match inspect_ln qt' with
+  | Tv_FVar fv' ->
+  if nfv = fv_to_string fv' then None
+  else Some qt'
+  | _ -> Some qt'

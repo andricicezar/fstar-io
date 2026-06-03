@@ -92,3 +92,8 @@ let pure_validate3 (x:string{valid x}) (f:(x:string{valid x} -> bool)) : (Trace.
   if f x
   then Inl x
   else Inr ()
+
+type int64 = x:nat{x <= 10}
+
+let incr_int64 (p:int64{p + 1 <= 10}) : int64 =
+  p + 1
