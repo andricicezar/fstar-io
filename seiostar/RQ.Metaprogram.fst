@@ -100,16 +100,7 @@ let rec collect_ref_layers (ty:typ)
 let refinement_lam_of_ty (ty:typ) : Tac (option term) =
   match collect_ref_layers ty with
   | None -> None
-  | Some (inner_b, pred) ->
-    let lam = pack_ln (Tv_Abs inner_b pred) in
-    let env = top_env () in
-    let (tc_res, _) = tc_term env lam in
-    let lam =
-      match tc_res with
-      | Some r -> let (lam', _) = r in lam'
-      | None -> lam
-    in
-    Some lam
+  | Some (inner_b, pred) -> Some (pack_ln (Tv_Abs inner_b pred))
 
 let rec typ_translation (qt:term) (oref:option term) : Tac term =
   match inspect_ln qt with
@@ -163,7 +154,6 @@ let rec typ_translation (qt:term) (oref:option term) : Tac term =
     | _ -> fail ("not a total function type")
   end
 
-  (** erase refinement **)
   | Tv_Refine _ _ ->
     (match collect_ref_layers qt with
      | Some (inner_b, pred) ->
