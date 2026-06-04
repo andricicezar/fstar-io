@@ -681,7 +681,7 @@ let prove_equality (nm:string) (unfold_names:list string) : Tac unit =
         simplify; primops; iota;
         unascribe;
         simplify];
-  dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
+  // dump ("PROVE_EQ_DUMP_BEGIN " ^ nm);
   print ("PROVE_EQ_DUMP_END " ^ nm);
   or_else
     (fun () -> solve_eq_goal 50)
@@ -718,7 +718,7 @@ let fill_trivial_refinements (l:list (FStar.Stubs.Reflection.Types.namedv & typ)
 let type_check_derivation (nm:string) g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   print_debug ("DEBUG: entering type_check_derivation");
   let t0 = curms () in
-  print ("DEBUG: deriv = " ^ term_to_string qderivation);
+  // print ("DEBUG: deriv = " ^ term_to_string qderivation);
   let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) false in
   let t1 = curms () in
   print ("  done instantiating implicits, " ^ string_of_int (List.length l) ^ " left, " ^ string_of_int (t1 - t0) ^ "ms");

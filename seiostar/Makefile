@@ -4,9 +4,6 @@ FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
 ROOTS := RrHP.fst \
-         RQ.TypingRelation.Tests.fst \
-         RQ.Metaprogram.Tests.fst \
-	 RunningExample.fst \
 	 $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
 	 $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
@@ -79,12 +76,45 @@ include $(BUILD_DIR)/depend.mk
 endif
 endif
 
+# Example files are excluded from `make verify` and verified separately with
+# `make verify-examples`. RunningExample.fst is special: it requires ~32GB of
+# RAM, so we run it without writing a .checked file and without using or
+# recording hints.
+SMALL_EXAMPLES := \
+    Examples.fst \
+    ExamplesIO.fst \
+    ExamplesRefs.fst \
+    ExamplesIORefinements.fst \
+    RQ.TypingRelation.Tests.fst \
+    RQ.Metaprogram.Tests.Examples.fst \
+    RQ.Metaprogram.Tests.ExamplesIO.fst \
+    RQ.Metaprogram.Tests.ExamplesRefs.fst \
+    RQ.Metaprogram.Tests.ExamplesIORefinements.fst \
+    RunningExample.fst
+
+SMALL_EXAMPLES_CHECKED := $(addprefix $(ABS_CACHEDIR)/,$(addsuffix .checked,$(SMALL_EXAMPLES)))
+
+EXAMPLE_CHECKED := $(SMALL_EXAMPLES_CHECKED) \
+                   $(addprefix $(CACHEDIR)/,$(addsuffix .checked,$(SMALL_EXAMPLES))) \
+                   $(CACHEDIR)/RunningExample.fst.checked \
+                   $(ABS_CACHEDIR)/RunningExample.fst.checked
+
+EXAMPLE_FLAGS = --cache_dir $(abspath $(CACHEDIR))
+EXAMPLE_FLAGS += --odir $(abspath $(ODIR))
+EXAMPLE_FLAGS += --include $(abspath $(LAMBDABOX_DIR))
+EXAMPLE_FLAGS += --warn_error -241-247-274-288-321-333
+EXAMPLE_FLAGS += $(OTHERFLAGS)
+
 ifdef _SINGLE_FILE
 verify: | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $(_SINGLE_FILE)
 else
-verify: $(ALL_CHECKED_FILES)
+verify: $(filter-out $(EXAMPLE_CHECKED),$(ALL_CHECKED_FILES))
 endif
+
+.PHONY: verify-examples
+verify-examples: $(SMALL_EXAMPLES_CHECKED) | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(EXAMPLE_FLAGS) RunningExample.fst
 
 $(BUILD_DIR)/depend.mk: $(ROOTS) | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) --dep full $(ROOTS) --extract '*' --output_deps_to $@
