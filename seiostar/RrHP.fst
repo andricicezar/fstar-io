@@ -98,22 +98,6 @@ let lem_rel_behTS (fs_e:wholeS) (e:wholeT)
     end
   end
 
-(** Proof of compiler correctness **)
-let ccI : intS = { ct = qUnit }
-
-let compiler_correctness  =
-  forall (ps:progS ccI).
-    behS (linkS ps ()) `rel_behs` behT (linkT (compile_prog ps) (| EUnit, TyUnit |))
-
-(** ** Proof of RrHP **)
-
-val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
-let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
-  let (| e, h |) = ctxt in
-  backtranslate h
-
-(** Variants that use backtranslation and imply the original criteria **)
-
 let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   : Lemma
       (requires ELam? pt /\ is_value ct)
@@ -161,6 +145,53 @@ let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   introduce forall (lt:local_trace h0) (r:closed_exp).
     behT (EApp pt ct) (lt, r) <==> behT sb (lt, r)
   with ()
+
+(** Proof of compiler correctness **)
+let ccI : intS = { ct = qUnit }
+
+let compiler_correctness  =
+  forall (ps:progS ccI).
+    behS (linkS ps ()) `rel_behs` behT (linkT (compile_prog ps) (| EUnit, TyUnit |))
+
+let proof_compiler_correctness () : Lemma (compiler_correctness) =
+  introduce forall (pS:progS ccI).
+    behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))
+  with begin
+    (* The refinement [is_lambda_io _._2._1._2] on [progS ccI] is not
+       elaborated by SMT when [ccI] is concrete, but it is when [i:intS]
+       is abstract. We dispatch to a local helper to recover it. *)
+    let lem (i:intS{i.ct == qUnit}) (pS:progS i) :
+      Lemma (behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))) =
+      let ps = pS._1 in
+      let qps = pS._2 in
+      let pt = compile_prog pS in
+      lem_compile_closed_arrow_is_elam qps._1;
+      lem_compile_closed_valid qps;
+      let wt = subst_beta EUnit (ELam?.b pt) in
+      Classical.forall_intro (Classical.move_requires (unfold_member_of_io_arrow i.ct qBool ps (ELam?.b pt)));
+      Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow i.ct qBool ps (ELam?.b pt)));
+      introduce forall h. i.ct ∈ (h, (), EUnit) ==> qBool ⫃ (h, ps (), wt) with
+        eliminate forall h (lt_v:local_trace h). i.ct ∈ (h++lt_v, (), EUnit) ==> qBool ⫃ (h++lt_v, ps (), wt)
+        with h [];
+      introduce forall h. i.ct ∋ (h, (), EUnit) ==> qBool ⫄ (h, ps (), wt) with
+        eliminate forall h (lt_v:local_trace h). i.ct ∋ (h++lt_v, (), EUnit) ==> qBool ⫄ (h++lt_v, ps (), wt)
+        with h [];
+      lem_rel_behST (ps ()) wt;
+      lem_rel_behTS (ps ()) wt;
+      lem_app_eq_subst_beta pt EUnit
+    in
+    lem ccI pS
+  end
+
+(** ** Proof of RrHP **)
+
+val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
+  let (| e, h |) = ctxt in
+  backtranslate h
+
+(** Variants that use backtranslation and imply the original criteria **)
+
 
 
 let rrschp_bt (i:intS) =
@@ -264,33 +295,3 @@ let rrhp_bt_implies_rrhp (i:intS) :
 let proof_rrhp i : Lemma (rrhp i) =
   proof_rrhp_bt i;
   rrhp_bt_implies_rrhp i
-
-let proof_compiler_correctness () : Lemma (compiler_correctness) =
-  introduce forall (pS:progS ccI).
-    behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))
-  with begin
-    (* Refinement on [progS ccI] does not elaborate when [ccI] is concrete,
-       so we re-establish it via [pS <: progS i] for an abstract [i:=ccI]. *)
-    let lem (i:intS{i.ct == qUnit}) (pS:progS i) :
-      Lemma (behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))) =
-      let ps = pS._1 in
-      let qps = pS._2 in
-      let pt : progT (comp_int i) = compile_prog pS in
-      lem_compile_closed_arrow_is_elam qps._1;
-      lem_compile_closed_valid qps;
-      let wt : wholeT = subst_beta EUnit (ELam?.b pt) in
-      Classical.forall_intro (Classical.move_requires (unfold_member_of_io_arrow i.ct qBool ps (ELam?.b pt)));
-      Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow i.ct qBool ps (ELam?.b pt)));
-      introduce forall h. i.ct ∈ (h, (), EUnit) ==> qBool ⫃ (h, ps (), wt) with
-        eliminate forall h (lt_v:local_trace h). i.ct ∈ (h++lt_v, (), EUnit) ==> qBool ⫃ (h++lt_v, ps (), wt)
-        with h [];
-      introduce forall h. i.ct ∋ (h, (), EUnit) ==> qBool ⫄ (h, ps (), wt) with
-        eliminate forall h (lt_v:local_trace h). i.ct ∋ (h++lt_v, (), EUnit) ==> qBool ⫄ (h++lt_v, ps (), wt)
-        with h [];
-      lem_backtranslate (TyUnit <: typing empty EUnit i.ct);
-      lem_rel_behST (ps ()) wt;
-      lem_rel_behTS (ps ()) wt;
-      lem_app_eq_subst_beta pt EUnit
-    in
-    lem ccI pS
-  end
