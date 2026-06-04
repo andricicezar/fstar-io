@@ -3,13 +3,20 @@
 This contains the artifact associated with the ICFP 2026 submission with the name:
 "[Misquoted No More: Securely Extracting F\* Programs with IO]()".
 
-The artifact contains the F* formalization from the paper. In particular, the
-proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
+To see how we implemented refinements check the following files:
+1. In `QTypes.fst` to see how we added refinements to the supported types
+2. In `RQ.TypingRelation.fst` to see how we updated the typing relation:
+  a) The typing relation is now indexed by a pre-condition.
+  b) The typing rule `QRef` that changes the refinement of a value.
+3. In `ExamplesRefs.fst` and `ExamplesIORefinements.fst` to see what
+  kind of examples we can do, and `RQ.TypingRelation.Tests.fst` to see
+  how the manually written derivations look like.
 
-Additionally, in file `RunningExample.fst`, we implement the running example from section 2,
-we verify it, and we use the metaprogram to find the derivation, and then we instantiate the
-compilation model from section 6, which shows that it is secure to link the
-extracted running example with unverified agents.
+The extension is still ongoing.
+After extending IO\* with refinements, we managed to update compilation and
+backtranslation and reprove that SEIO* satisfies RrHP.
+The proof of RrHP contains one admitted compatibility lemma that we did not
+have time to finish, but should be provable. 
 
 The artifact is admit free.
 
@@ -49,9 +56,10 @@ We list where the definitions and theorems of the paper are.
 | Source-to-target compatibility lemmas | `LogRelSourceTarget.CompatibilityLemmas.fst` |
 | **Section 5** - Proof of RrHP | |
 | Compilation model | `RrHP.fst` |
-| RrHP | `RrHP.fst` |
+| Theorem 5.2 (compiler correctness) | `RrHP.fst` as `compiler_correctness` (statement) and `proof_compiler_correctness` (proof) |
+| Theorem 5.3 (RrHP) | `RrHP.fst` as `rrhp` (statement) and `proof_rrhp` (proof) |
 | Backtranslation | `Backtranslation.fst` |
-| **Section 6** - Running SEIO* | |
+| **Section 7** - Running SEIO* | |
 | Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/LambdaIOToLambdaBox.fst` |
 | Compiling running example | `lambdabox/LambdaBoxExamples.fst` |
 | Runtime with implementing primitives | `lambdabox/axioms.ml` |
@@ -64,7 +72,8 @@ The simplest way for OPAM users is to create the `only-fstar` switch:
 $ opam switch import only-fstar.export --switch only-fstar
 
 If you want to install F* manually,
-You need F* version 2026.03.24 to run this artifact.
+you need **exactly** F* version 2026.03.24 to run this artifact — other
+versions (older or newer) are not guaranteed to work.
 See more details about [how to install F\* here](https://github.com/FStarLang/FStar/blob/master/INSTALL.md).
 
 ## Evaluation Instructions
@@ -74,24 +83,42 @@ Some warnings are expected, they are benign.
 
 ### Verify SEIO\*
 
-**Expected time.**
-Around 4 minutes (if running 8 jobs in parallel with `make verify -j 8`). 
+**Expected time and memory.**
+Around 7 minutes (if running 8 jobs in parallel with `make verify -j 8`).
+Requires 4GB of RAM.
 
 **Script for this step.**
-After setting up F*, running `make` in this repository should verify all the F*
-files in it, including our formalization and examples. You can pass `-j` to run
-more jobs in parallel. You can also inspect the files interactively in VS Code
-by installing the fstar-vscode-assistant extension.
+After setting up F*, running `make` in this repository should verify the core
+formalization. You can pass `-j` to run more jobs in parallel. You can also
+inspect the files interactively in VS Code by installing the
+fstar-vscode-assistant extension.
 
 ```bash
 ~/seiostar$ make verify
 ```
 
+Note: `make verify` does **not** verify any of the examples (the
+`Examples*.fst`, `RQ.*.Tests*.fst`, and `RunningExample.fst` files) — see
+[Verify the examples](#verify-the-examples) below.
+
 **Expected output.**
 Should be a long list of files verified by F\*. A few warnings appear
 that the name of our `IO` module conflicts with F*'s module,
 they are benign and can be ignored.
-Also logs from the metaprogram appear.
+
+### Verify the examples
+
+The examples (including `RunningExample.fst`) are verified separately:
+
+```bash
+~/seiostar$ make verify-examples
+```
+
+**Expected time.**
+Around 23 minutes when running a single job (no `-j`).
+
+`RunningExample.fst` is part of this target and requires significantly more
+resources than the rest: **32GB of RAM is required** to verify it.
 
 **Checking for lack of axioms.**
 To check that we use no axioms or admit any proofs, you can clean the already

@@ -20,7 +20,7 @@ let extend (t:qType) (g:typ_env)
 let fv_in_env (g:typ_env) (e:exp) : Type0 =
   forall (fv:var). fv `FStar.List.Tot.memP` free_vars e ==> Some? (g fv)
 
-let lem_no_fv_is_closed (e:exp) 
+let lem_no_fv_is_closed (e:exp)
   : Lemma
     (requires fv_in_env empty e)
     (ensures is_closed e)
@@ -89,7 +89,7 @@ let lem_sub_elam_inc (s:sub true) (n:nat) :
       introduce _ ==> _ with _. ()
     end
 
-#push-options "--z3rlimit 10"
+#push-options "--z3rlimit 10 --split_queries always"
 let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires

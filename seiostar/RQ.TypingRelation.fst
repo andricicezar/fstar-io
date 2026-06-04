@@ -1,14 +1,12 @@
 module RQ.TypingRelation
 
-open FStar.Tactics
-
 open IOStar
 include QTypes.OpenValComp
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
-type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
+type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> Type =
 | Qtt         : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
 | QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g #qFileDescr fd)
 
@@ -19,42 +17,52 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | QWeaken      : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #x : fs_oval g a ->
+                #preX : spec_env g ->
+                #x : fs_oval g a preX ->
                 typing g x ->
                 typing (extend b g) (fs_oval_weaken b x)
 
-| QAppGhost   : #g : typ_env ->
+| QRef    : #g : typ_env ->
                 #a : qType ->
-                #f : fs_oval g (a ^-> qUnit) -> (** This has to be Tot. If it is GTot unit, F* can treat it as Pure unit **)
-                #x : fs_oval g a ->
-                typing #qUnit g (fs_oval_app #_ #_ #_ f x)
+                #preV : spec_env g ->
+                #v : fs_oval g a preV ->
+                typing g v ->
+                #ref : (ref_type a -> Type0) ->
+                typing g (fs_oval_ref v ref)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #f : fs_oval g (a ^-> b) ->
-                #x : fs_oval g a ->
+                #preF : spec_env g ->
+                #f : fs_oval g (a ^-> b) preF ->
+                #preX : spec_env g ->
+                #x : fs_oval g a preX ->
                 typing g f ->
                 typing g x ->
-                typing g (fs_oval_app #_ #_ #_ f x)
+                typing g (fs_oval_app f x)
 
 | QLambda     : #a : qType ->
                 #b : qType ->
                 #g : typ_env ->
-                #body : fs_oval (extend a g) b ->
+                #preBody : spec_env (extend a g) ->
+                #body : fs_oval (extend a g) b preBody ->
                 typing (extend a g) body ->
                 typing #(a ^-> b) g (fs_oval_lambda body)
 
 | QZero       : #g : typ_env -> typing #qNat g (fs_oval_zero g)
 | QSucc       : #g : typ_env ->
-                #n : fs_oval g qNat ->
+                #preN : spec_env g ->
+                #n : fs_oval g qNat preN ->
                 typing g n ->
                 typing #qNat g (fs_oval_succ n)
 | QNRec       : #g : typ_env ->
                 #a : qType ->
-                #n : fs_oval g qNat ->
-                #base : fs_oval g a ->
-                #f : fs_oval g (a ^-> a) ->
+                #preN : spec_env g ->
+                #n : fs_oval g qNat preN ->
+                #preBase : spec_env g ->
+                #base : fs_oval g a preBase ->
+                #preF : spec_env g ->
+                #f : fs_oval g (a ^-> a) preF ->
                 typing g n ->
                 typing g base ->
                 typing g f ->
@@ -64,82 +72,99 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | QFalse      : #g : typ_env -> typing g (fs_oval_return g #qBool false)
 | QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g #qString s)
 | QStringEq   : #g : typ_env ->
-                #s1 : fs_oval g qString ->
+                #preS1 : spec_env g ->
+                #s1 : fs_oval g qString preS1 ->
                 typing g s1 ->
-                #s2 : fs_oval g qString ->
+                #preS2 : spec_env g ->
+                #s2 : fs_oval g qString preS2 ->
                 typing g s2 ->
                 typing g (fs_oval_eq_string s1 s2)
 | QIf         : #g : typ_env ->
                 #a : qType ->
-                #c : fs_oval g qBool ->
+                #preC : spec_env g ->
+                #c : fs_oval g qBool preC ->
                 typing g c ->
-                #t : fs_oval g a ->
+                #preT : spec_env g ->
+                #t : fs_oval g a preT ->
                 typing g t ->
-                #e : fs_oval g a ->
+                #preE : spec_env g ->
+                #e : fs_oval g a preE ->
                 typing g e ->
                 typing g (fs_oval_if c t e)
 
 | QMkpair   : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #x : fs_oval g a ->
-              #y : fs_oval g b ->
+              #preX : spec_env g ->
+              #x : fs_oval g a preX ->
+              #preY : spec_env g ->
+              #y : fs_oval g b preY ->
               typing g x ->
               typing g y ->
               typing g (fs_oval_pair x y)
 | QFst      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oval g (a ^* b) ->
+              #preP : spec_env g ->
+              #p : fs_oval g (a ^* b) preP ->
               typing g p ->
               typing g (fs_oval_fmap p fst)
 | QSnd      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oval g (a ^* b) ->
+              #preP : spec_env g ->
+              #p : fs_oval g (a ^* b) preP ->
               typing g p ->
               typing g (fs_oval_fmap p snd)
 | QInl      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oval g a ->
+              #preP : spec_env g ->
+              #p : fs_oval g a preP ->
               typing g p ->
               typing #(a ^+ b) g (fs_oval_fmap p Inl)
 | QInr      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oval g b ->
+              #preP : spec_env g ->
+              #p : fs_oval g b preP ->
               typing g p ->
               typing #(a ^+ b) g (fs_oval_fmap p Inr)
 | QCase     : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #c : qType ->
-              #cond : fs_oval g (a ^+ b) ->
+              #preCond : spec_env g ->
+              #cond : fs_oval g (a ^+ b) preCond->
               typing g cond ->
-              #inlc : fs_oval (extend a g) c ->
+              #preInlc : spec_env (extend a g) ->
+              #inlc : fs_oval (extend a g) c preInlc ->
               typing _ inlc ->
-              #inrc : fs_oval (extend b g) c ->
+              #preInrc : spec_env (extend b g) ->
+              #inrc : fs_oval (extend b g) c preInrc ->
               typing _ inrc ->
               typing g (fs_oval_case cond inlc inrc)
 | QLambdaIO : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #body : fs_ocomp (extend a g) b ->
+                #preBody : spec_env (extend a g) ->
+                #body : fs_ocomp (extend a g) b preBody ->
                 typing_io (extend a g) body ->
                 typing g (fs_oval_lambda_ocomp body)
-and typing_io : #a:qType -> g:typ_env -> fs_ocomp g a -> Type =
+and typing_io : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_ocomp g a preG -> Type =
 | QCall :
         #g:typ_env ->
         o:io_ops ->
-        #args:fs_oval g (q_io_args o) ->
+        #preArgs:spec_env g ->
+        #args:fs_oval g (q_io_args o) preArgs ->
         typing g args ->
         typing_io #(q_io_res o) g (fs_ocomp_call_oval o args)
 
 | QReturn :
         #g:typ_env ->
         #a:qType ->
-        #x:fs_oval g a ->
+        #preX:spec_env g ->
+        #x:fs_oval g a preX ->
         typing g x ->
         typing_io #a g (fs_ocomp_return_oval x)
 
@@ -147,8 +172,10 @@ and typing_io : #a:qType -> g:typ_env -> fs_ocomp g a -> Type =
         #g:typ_env ->
         #a:qType ->
         #b:qType ->
-        #m:fs_ocomp g a ->
-        #k:fs_ocomp (extend a g) b ->
+        #preM:spec_env g ->
+        #m:fs_ocomp g a preM ->
+        #preK:(spec_env (extend a g)) ->
+        #k:fs_ocomp (extend a g) b preK ->
         typing_io g m ->
         typing_io (extend a g) k ->
         typing_io #b g (fs_ocomp_bind m k)
@@ -156,34 +183,165 @@ and typing_io : #a:qType -> g:typ_env -> fs_ocomp g a -> Type =
 | QAppIO    : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #f : fs_oval g (a ^->!@ b) ->
-                #x : fs_oval g a ->
+                #preF : spec_env g ->
+                #f : fs_oval g (a ^->!@ b) preF ->
+                #preX : spec_env g ->
+                #x : fs_oval g a preX ->
                 typing g f ->
                 typing g x ->
                 typing_io g (fs_ocomp_app_oval_oval f x)
 | QIfIO     : #g : typ_env ->
-                #a : qType ->
-                #c : fs_oval g qBool ->
-                typing #qBool g c ->
-                #t : fs_ocomp g a ->
-                typing_io g t ->
-                #e : fs_ocomp g a ->
-                typing_io g e ->
-                typing_io g (fs_ocomp_if_oval c t e)
+              #a : qType ->
+              #preC : spec_env g ->
+              #c : fs_oval g qBool preC ->
+              typing g c ->
+              #preT : spec_env g ->
+              #t : fs_ocomp g a preT ->
+              typing_io g t ->
+              #preE : spec_env g ->
+              #e : fs_ocomp g a preE ->
+              typing_io g e ->
+              typing_io g (fs_ocomp_if_oval c t e)
 | QCaseIO : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #c : qType ->
-              #cond : fs_oval g (a ^+ b) ->
+              #preCond : spec_env g ->
+              #cond : fs_oval g (a ^+ b) preCond ->
               typing g cond ->
-              #inlc : fs_ocomp (extend a g) c ->
+              #preInlc : spec_env (extend a g) ->
+              #inlc : fs_ocomp (extend a g) c preInlc->
               typing_io _ inlc ->
-              #inrc : fs_ocomp (extend b g) c ->
+              #preInrc : spec_env (extend b g) ->
+              #inrc : fs_ocomp (extend b g) c preInrc ->
               typing_io _ inrc ->
               typing_io g (fs_ocomp_case_oval cond inlc inrc)
 
-let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
+let (⊢) (#a:qType) (g:typ_env) (#pre:spec_env g) (x:fs_oval g a pre) =
   typing g x
 
-let (⊩) (a:qType) (x:fs_val a) =
-  typing #a empty (fs_oval_return empty x)
+unfold
+let fs_oval_helper_g (g:typ_env) (#a:qType) (x:fs_val a) (pre:spec_env g)
+  : fs_oval g a pre
+  = fun _ -> x
+
+unfold
+let fs_oval_helper #a x pre = fs_oval_helper_g empty #a x pre
+
+(* guarded_turnstile *)
+let packed_turnstile_g g (a:qType) (x:fs_val a) =
+  pre:spec_env g & (g ⊢ (fs_oval_helper_g g x pre))
+
+let pack_turnstile_g
+  (#g:typ_env)
+  (#a:qType)
+  (#x:fs_val a)
+  (#pre:spec_env g)
+  (#x':fs_oval g a pre)
+  (t:typing g x')
+  : Pure (packed_turnstile_g g a x)
+    (requires (x' == (fun _ -> x))) (ensures (fun _ -> True))
+  = (| pre, t |)
+
+let (⊩) (a:qType) (x: fs_val a) =
+  packed_turnstile_g empty a x
+
+let pack_turnstile
+  (#a:qType)
+  (#x:fs_val a)
+  (#pre:spec_env empty)
+  (#x':fs_oval empty a pre)
+  (t:typing empty x')
+  : Pure (a ⊩ x) (requires (x' == (fun _ -> x))) (ensures (fun _ -> True))
+   =
+  pack_turnstile_g #empty #a #x #pre #x' t
+
+let (⊫) (a:qType) (x: fs_val a) =
+  t:(a ⊩ x) & squash (t._1 empty_eval)
+
+(** Package a thunked derivation together with its precondition and
+    a witness discharging it into the [⊫] dependent triple. *)
+let mk_turniqet #a #x
+  (thk_deriv:a ⊩ x)
+  (proof:squash (thk_deriv._1 empty_eval))
+  : a ⊫ x
+  = (| thk_deriv, proof |)
+
+(** Helper functions **)
+
+
+let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
+  QWeaken QAxiom
+
+
+let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
+  QWeaken qVar1
+
+
+let qVar3 #g #a #b #c #d : (extend d (extend c (extend b (extend a g)))) ⊢ (fun fsG -> hd (tail (tail (tail fsG)))) =
+  QWeaken qVar2
+
+
+let qVar4 #g #a #b #c #d #e : (extend e (extend d (extend c (extend b (extend a g))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail fsG))))) =
+  QWeaken qVar3
+
+
+let qVar5 #g #a #b #c #d #e #f : (extend f (extend e (extend d (extend c (extend b (extend a g)))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail fsG)))))) =
+  QWeaken qVar4
+
+
+let qVar6 #g #a #b #c #d #e #f #h : (extend h (extend f (extend e (extend d (extend c (extend b (extend a g))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail fsG))))))) =
+  QWeaken qVar5
+
+
+let qVar7 #g #a #b #c #d #e #f #h #i : (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g)))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail fsG)))))))) =
+  QWeaken qVar6
+
+
+let qVar8 #g #a #b #c #d #e #f #h #i #j : (extend j (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g))))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail (tail fsG))))))))) =
+  QWeaken qVar7
+
+
+let qVar9 #g #a #b #c #d #e #f #h #i #j #k : (extend k (extend j (extend i (extend h (extend f (extend e (extend d (extend c (extend b (extend a g)))))))))) ⊢ (fun fsG -> hd (tail (tail (tail (tail (tail (tail (tail (tail (tail fsG)))))))))) =
+  QWeaken qVar8
+
+let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g) b wpf)
+  (qx : typing g x) (qf : typing _ f)
+  : typing g (fs_oval_app (fs_oval_lambda f) x)
+  = QApp (QLambda qf) qx
+
+unfold let fs_ocomp_let_io_ex
+  (#g:typ_env)
+  (#a #b:qType)
+  (#preM:spec_env g)
+  (m:fs_ocomp g (a ^+ qUnit) preM)
+  (#preK:spec_env (extend a (extend (a ^+ qUnit) g)))
+  (k:fs_ocomp (extend a (extend (a ^+ qUnit) g)) (b ^+ qUnit) preK)
+  : fs_ocomp g (b ^+ qUnit)
+      (spec_env_bind preM
+        (spec_env_case (fs_oval_axiom g (a ^+ qUnit))
+          preK
+          (spec_env_axiom #(extend (a ^+ qUnit) g) #qUnit)))
+  =
+  fs_ocomp_bind m
+    (fs_ocomp_case_oval
+      (fs_oval_axiom g (a ^+ qUnit))
+      k
+      (fs_ocomp_return_oval
+        (fs_oval_fmap
+          (fs_oval_axiom (extend (a ^+ qUnit) g) qUnit)
+          (fun (x:fs_val qUnit) -> (Inr x <: fs_val (b ^+ qUnit))))))
+
+val qLetIOEx : #g:typ_env ->
+  #a:qType ->
+  #b:qType ->
+  #preM:spec_env g ->
+  #m:fs_ocomp g (a ^+ qUnit) preM ->
+  #preK:spec_env (extend a (extend (a ^+ qUnit) g)) ->
+  #k:fs_ocomp (extend a (extend (a ^+ qUnit) g)) (b ^+ qUnit) preK ->
+  typing_io g m ->
+  typing_io (extend a (extend (a ^+ qUnit) g)) k ->
+  typing_io g (fs_ocomp_let_io_ex m k)
+
+ let qLetIOEx qm qk =
+  QBind qm (QCaseIO QAxiom qk (QReturn (QInr QAxiom)))

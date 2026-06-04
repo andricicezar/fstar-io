@@ -56,21 +56,24 @@ let get_req (fd:file_descr) (msg:bool) : io (either bool bool) =
   | Inl _ -> return (Inl true)
   | Inr _ -> return (Inr false)
 
-let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
-  match!@ m with
-  | Inl x -> k x
-  | Inr x -> io_return (Inr x)
-
 let open2_read_write () =
   let!@! fd1 = io_call OOpen "/tmp/input" in
   let!@! fd2 = io_call OOpen "/tmp/output" in
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
 
-val eq_string : string -> string -> bool
-let eq_string s t =
-  s = t
-
 let echo (fd1 fd2:file_descr) =
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
+
+let test_letbb_inl_body () : io (resexn file_descr) =
+  let!@! fd = io_call OOpen "/tmp/input" in
+  io_return (Inl fd)
+
+let test_letbb_closure (fd2:file_descr) : io (resexn unit) =
+  let!@! data = io_call ORead fd2 in
+  io_call OWrite (fd2, data)
+
+let test_letbb_nested_inl () : io (resexn (either file_descr file_descr)) =
+  let!@! fd = io_call OOpen "/tmp/x" in
+  io_return (Inl (Inl fd))

@@ -3,21 +3,19 @@ FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
-ROOTS := RQ.TypingRelation.Tests.fst \
-	 RQ.Metaprogram.Tests.fst \
-	 RunningExample.fst \
-         $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
-         $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
+ROOTS := RrHP.fst \
+	 $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
+	 $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
+ABS_CACHEDIR := $(abspath $(CACHEDIR))
 
-FLAGS = --cache_checked_modules --cache_dir $(CACHEDIR)
-FLAGS += --record_hints --use_hints --hint_dir $(BUILD_DIR)/hints
-FLAGS += --odir $(ODIR)
-FLAGS += --include $(LAMBDABOX_DIR)
-FLAGS += --warn_error -241-247-274-321-333
-FLAGS += --silent
+FLAGS = --cache_checked_modules --cache_dir $(abspath $(CACHEDIR))
+FLAGS += --record_hints --use_hints --hint_dir $(abspath $(BUILD_DIR)/hints)
+FLAGS += --odir $(abspath $(ODIR))
+FLAGS += --include $(abspath $(LAMBDABOX_DIR))
+FLAGS += --warn_error -241-247-274-288-321-333
 FLAGS += $(OTHERFLAGS)
 
 all: verify
@@ -29,11 +27,23 @@ $(CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+$(ABS_CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 $(CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+$(ABS_CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 $(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+$(ABS_CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
@@ -59,19 +69,52 @@ ifeq (validate,$(firstword $(MAKECMDGOALS)))
   endif
 endif
 
-# If we're building a package or a single file, we don't need to run the dep analysis.
-ifneq ($(MAKECMDGOALS),package)
+# If we're building a package, running MCP, or a single file, we don't need to run dep analysis.
+ifeq ($(filter package mcp,$(MAKECMDGOALS)),)
 ifeq ($(_SINGLE_FILE),)
 include $(BUILD_DIR)/depend.mk
 endif
 endif
 
+# Example files are excluded from `make verify` and verified separately with
+# `make verify-examples`. RunningExample.fst is special: it requires ~32GB of
+# RAM, so we run it without writing a .checked file and without using or
+# recording hints.
+SMALL_EXAMPLES := \
+    Examples.fst \
+    ExamplesIO.fst \
+    ExamplesRefs.fst \
+    ExamplesIORefinements.fst \
+    RQ.TypingRelation.Tests.fst \
+    RQ.Metaprogram.Tests.Examples.fst \
+    RQ.Metaprogram.Tests.ExamplesIO.fst \
+    RQ.Metaprogram.Tests.ExamplesRefs.fst \
+    RQ.Metaprogram.Tests.ExamplesIORefinements.fst \
+    RunningExample.fst
+
+SMALL_EXAMPLES_CHECKED := $(addprefix $(ABS_CACHEDIR)/,$(addsuffix .checked,$(SMALL_EXAMPLES)))
+
+EXAMPLE_CHECKED := $(SMALL_EXAMPLES_CHECKED) \
+                   $(addprefix $(CACHEDIR)/,$(addsuffix .checked,$(SMALL_EXAMPLES))) \
+                   $(CACHEDIR)/RunningExample.fst.checked \
+                   $(ABS_CACHEDIR)/RunningExample.fst.checked
+
+EXAMPLE_FLAGS = --cache_dir $(abspath $(CACHEDIR))
+EXAMPLE_FLAGS += --odir $(abspath $(ODIR))
+EXAMPLE_FLAGS += --include $(abspath $(LAMBDABOX_DIR))
+EXAMPLE_FLAGS += --warn_error -241-247-274-288-321-333
+EXAMPLE_FLAGS += $(OTHERFLAGS)
+
 ifdef _SINGLE_FILE
 verify: | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $(_SINGLE_FILE)
 else
-verify: $(ALL_CHECKED_FILES)
+verify: $(filter-out $(EXAMPLE_CHECKED),$(ALL_CHECKED_FILES))
 endif
+
+.PHONY: verify-examples
+verify-examples: $(SMALL_EXAMPLES_CHECKED) | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(EXAMPLE_FLAGS) RunningExample.fst
 
 $(BUILD_DIR)/depend.mk: $(ROOTS) | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) --dep full $(ROOTS) --extract '*' --output_deps_to $@
@@ -90,9 +133,17 @@ $(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 
 # Package this directory (from Git). Note: git archive apparently
 # already removes user and host names (good!)
-.PHONY: package
+.PHONY: package mcp
 package:
 	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
+
+
+FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
+mcp: | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
+	@test -f "$(FSTAR_LSP_MCP_MAIN)" || (echo "Missing MCP server entrypoint: $(FSTAR_LSP_MCP_MAIN)" 1>&2; exit 1)
+	@ARGS_FILE="$(abspath $(BUILD_DIR)/fstar-lsp.args)"; \
+    printf '%s\n' $(FLAGS) > "$$ARGS_FILE"; \
+	FSTAR_WORKSPACE_ROOT="$(CURDIR)" FSTAR_LSP_ARGS_FILE="$$ARGS_FILE" exec node "$(FSTAR_LSP_MCP_MAIN)"
 
 ifdef _SINGLE_FILE
 validate: | $(CACHEDIR) $(ODIR)

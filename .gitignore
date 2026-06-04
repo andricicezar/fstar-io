@@ -7,3 +7,6 @@ out
 *.fst#
 .#*
 .env
+**/.build
+.envrc
+.direnv
