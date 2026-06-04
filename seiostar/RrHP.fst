@@ -98,6 +98,13 @@ let lem_rel_behTS (fs_e:wholeS) (e:wholeT)
     end
   end
 
+(** Proof of compiler correctness **)
+let ccI : intS = { ct = qUnit }
+
+let compiler_correctness  =
+  forall (ps:progS ccI).
+    behS (linkS ps ()) `rel_behs` behT (linkT (compile_prog ps) (| EUnit, TyUnit |))
+
 (** ** Proof of RrHP **)
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
@@ -257,3 +264,33 @@ let rrhp_bt_implies_rrhp (i:intS) :
 let proof_rrhp i : Lemma (rrhp i) =
   proof_rrhp_bt i;
   rrhp_bt_implies_rrhp i
+
+let proof_compiler_correctness () : Lemma (compiler_correctness) =
+  introduce forall (pS:progS ccI).
+    behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))
+  with begin
+    (* Refinement on [progS ccI] does not elaborate when [ccI] is concrete,
+       so we re-establish it via [pS <: progS i] for an abstract [i:=ccI]. *)
+    let lem (i:intS{i.ct == qUnit}) (pS:progS i) :
+      Lemma (behS (linkS pS ()) `rel_behs` behT (linkT (compile_prog pS) (| EUnit, TyUnit |))) =
+      let ps = pS._1 in
+      let qps = pS._2 in
+      let pt : progT (comp_int i) = compile_prog pS in
+      lem_compile_closed_arrow_is_elam qps._1;
+      lem_compile_closed_valid qps;
+      let wt : wholeT = subst_beta EUnit (ELam?.b pt) in
+      Classical.forall_intro (Classical.move_requires (unfold_member_of_io_arrow i.ct qBool ps (ELam?.b pt)));
+      Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow i.ct qBool ps (ELam?.b pt)));
+      introduce forall h. i.ct ∈ (h, (), EUnit) ==> qBool ⫃ (h, ps (), wt) with
+        eliminate forall h (lt_v:local_trace h). i.ct ∈ (h++lt_v, (), EUnit) ==> qBool ⫃ (h++lt_v, ps (), wt)
+        with h [];
+      introduce forall h. i.ct ∋ (h, (), EUnit) ==> qBool ⫄ (h, ps (), wt) with
+        eliminate forall h (lt_v:local_trace h). i.ct ∋ (h++lt_v, (), EUnit) ==> qBool ⫄ (h++lt_v, ps (), wt)
+        with h [];
+      lem_backtranslate (TyUnit <: typing empty EUnit i.ct);
+      lem_rel_behST (ps ()) wt;
+      lem_rel_behTS (ps ()) wt;
+      lem_app_eq_subst_beta pt EUnit
+    in
+    lem ccI pS
+  end
