@@ -192,6 +192,35 @@ let rec compile (e: exp) : Tot term (decreases e) =
   | EStringEq s1 s2 ->
       TApp (TApp (TConst string_eq_kn) (compile s1)) (compile s2)
 
+  | EZero -> TConstruct natTyId 0 []
+  | ESucc e' -> TConstruct natTyId 1 [compile e']
+  | ENRec e1 e2 e3 ->
+      (* Compile ENRec as:
+         (fix go n acc f = match n with | 0 -> acc | S m -> go m (f acc) f)
+           applied to (compile e1) (compile e2) (compile e3)
+         Inside fix body (go = TRel 0), after 3 lambdas:
+           go -> TRel 3, n -> TRel 2, acc -> TRel 1, f -> TRel 0
+         In succ branch (m bound at 0):
+           go -> TRel 4, n -> TRel 3, acc -> TRel 2, f -> TRel 1, m -> TRel 0 *)
+      let fix_body =
+        TLambda NAnon (
+          TLambda NAnon (
+            TLambda NAnon (
+              TCase (natTyId, 0) (TRel 2) [
+                (* zero: return acc *)
+                ([], TRel 1);
+                (* succ m: go m (f acc) f *)
+                ([NAnon],
+                  TApp (TApp (TApp (TRel 4) (TRel 0))
+                             (TApp (TRel 1) (TRel 2)))
+                       (TRel 1))
+              ]
+            )
+          )
+        )
+      in
+      TApp (TApp (TApp (TFix [(NAnon, fix_body, 0)] 0) (compile e1)) (compile e2)) (compile e3)
+
 (** Compile a full program with the base environment *)
 let compile_program (e: exp) : program = (base_env, compile e)
 

@@ -28,10 +28,10 @@ The Peregrine step (`io_program_raw.mlf`) runs automatically under
 
 4. Test io_program_exe:
 
-        seiostar/io$ echo "foo" > .build/temp
-        seiostar/io$ .build/io_program_exe
+        $ echo "foo" > .build/temp
+        $ .build/io_program_exe
         true
-        seiostar/io$ cat .build/temp
+        $ cat .build/temp
         overwrite
 
 5. Test other agents:

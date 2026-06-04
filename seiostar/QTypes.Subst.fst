@@ -30,7 +30,8 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   | EFalse
   | EVar _
   | EFileDescr _
-  | EString _ -> ()
+  | EString _
+  | EZero -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
@@ -42,6 +43,7 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   | ESnd e1
   | EInl e1
   | EInr e1
+  | ESucc e1
   | ECall _ e1 -> subst_comp f g e1
   | EApp e1 e2
   | EStringEq e1 e2
@@ -49,7 +51,8 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
     subst_comp f g e1;
     subst_comp f g e2
     end
-  | EIf e1 e2 e3 -> begin
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 -> begin
     subst_comp f g e1;
     subst_comp f g e2;
     subst_comp f g e3
@@ -76,7 +79,8 @@ let rec shift_sub_equiv_sub_inc_no_rename #t #g
   | EFalse
   | EVar _
   | EFileDescr _
-  | EString _ -> ()
+  | EString _
+  | EZero -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam s') (sub_elam sub_inc) e1;
     introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
@@ -88,6 +92,7 @@ let rec shift_sub_equiv_sub_inc_no_rename #t #g
   | ESnd e1
   | EInl e1
   | EInr e1
+  | ESucc e1
   | ECall _ e1 -> shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f
   | EApp e1 e2
   | EStringEq e1 e2
@@ -95,7 +100,8 @@ let rec shift_sub_equiv_sub_inc_no_rename #t #g
     shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
     shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f
   end
-  | EIf e1 e2 e3 -> begin
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 -> begin
     shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
     shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f;
     shift_sub_equiv_sub_inc_no_rename #t #g s' e3 f
@@ -123,7 +129,8 @@ let rec shift_sub_equiv_sub_inc_rename #t
   | EFalse
   | EVar _
   | EFileDescr _
-  | EString _ -> ()
+  | EString _
+  | EZero -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam s') (sub_elam sub_inc) e1;
     introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with ();
@@ -133,6 +140,7 @@ let rec shift_sub_equiv_sub_inc_rename #t
   | ESnd e1
   | EInl e1
   | EInr e1
+  | ESucc e1
   | ECall _ e1 -> shift_sub_equiv_sub_inc_rename #t s' e1 f
   | EApp e1 e2
   | EStringEq e1 e2
@@ -140,7 +148,8 @@ let rec shift_sub_equiv_sub_inc_rename #t
     shift_sub_equiv_sub_inc_rename #t s' e1 f;
     shift_sub_equiv_sub_inc_rename #t s' e2 f
   end
-  | EIf e1 e2 e3 -> begin
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 -> begin
     shift_sub_equiv_sub_inc_rename #t s' e1 f;
     shift_sub_equiv_sub_inc_rename #t s' e2 f;
     shift_sub_equiv_sub_inc_rename #t s' e3 f
@@ -173,6 +182,8 @@ let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
       end
     | EInl e' -> lem_value_is_closed e'
     | EInr e' -> lem_value_is_closed e'
+    | EZero -> ()
+    | ESucc e' -> lem_value_is_closed e'
     end
   end;
   lem_subst_freevars_closes_exp s e 0;
@@ -185,7 +196,7 @@ let rec lem_subst_id (e:exp) :
   Lemma (ensures subst sub_id e == e)
   (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ | EZero -> ()
   | EVar _ -> ()
   | ELam e' ->
     introduce forall (y:var). sub_elam sub_id y == sub_id y with begin
@@ -193,11 +204,12 @@ let rec lem_subst_id (e:exp) :
     end;
     equiv_subs_implies_equiv_substs (sub_elam sub_id) sub_id e';
     lem_subst_id e'
-  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ESucc e'
   | ECall _ e' -> lem_subst_id e'
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_subst_id e1; lem_subst_id e2
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     lem_subst_id e1; lem_subst_id e2; lem_subst_id e3
   | ECase e1 e2 e3 ->
     lem_subst_id e1;
@@ -231,18 +243,19 @@ let rec subst_comp_ren_ren (f:sub true) (g:sub true) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ | EZero -> ()
   | ELam e1 ->
     subst_comp_ren_ren (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
       ()
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
-  | EFst e1 | ESnd e1 | EInl e1 | EInr e1
+  | EFst e1 | ESnd e1 | EInl e1 | EInr e1 | ESucc e1
   | ECall _ e1 -> subst_comp_ren_ren f g e1
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren_ren f g e1; subst_comp_ren_ren f g e2
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     subst_comp_ren_ren f g e1; subst_comp_ren_ren f g e2; subst_comp_ren_ren f g e3
   | ECase e1 e2 e3 ->
     subst_comp_ren_ren f g e1;
@@ -274,18 +287,19 @@ let rec subst_comp_ren #b (r:sub true) (g:sub b) (e:exp) :
   Lemma (ensures subst r (subst g e) == subst (gsub_comp r g) e)
         (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ | EZero -> ()
   | ELam e1 ->
     subst_comp_ren (sub_elam r) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam r) (sub_elam g)) x == (sub_elam (gsub_comp r g)) x with begin
       lem_pointwise_sub_elam_ren r g x
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam r) (sub_elam g)) (sub_elam (gsub_comp r g)) e1
-  | EFst e1 | ESnd e1 | EInl e1 | EInr e1
+  | EFst e1 | ESnd e1 | EInl e1 | EInr e1 | ESucc e1
   | ECall _ e1 -> subst_comp_ren r g e1
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren r g e1; subst_comp_ren r g e2
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     subst_comp_ren r g e1; subst_comp_ren r g e2; subst_comp_ren r g e3
   | ECase e1 e2 e3 ->
     subst_comp_ren r g e1;
@@ -312,18 +326,19 @@ let rec subst_comp_ren_right #b (f:sub b) (g:sub true) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ | EZero -> ()
   | ELam e1 ->
     subst_comp_ren_right (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
       lem_pointwise_sub_elam_ren_right f g x
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
-  | EFst e1 | ESnd e1 | EInl e1 | EInr e1
+  | EFst e1 | ESnd e1 | EInl e1 | EInr e1 | ESucc e1
   | ECall _ e1 -> subst_comp_ren_right f g e1
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren_right f g e1; subst_comp_ren_right f g e2
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     subst_comp_ren_right f g e1; subst_comp_ren_right f g e2; subst_comp_ren_right f g e3
   | ECase e1 e2 e3 ->
     subst_comp_ren_right f g e1;
@@ -364,18 +379,19 @@ let rec subst_comp_general #b1 #b2 (f:sub b1) (g:sub b2) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EVar _ | EFileDescr _ | EString _ | EZero -> ()
   | ELam e1 ->
     subst_comp_general (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
       lem_pointwise_sub_elam_gen f g x
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
-  | EFst e1 | ESnd e1 | EInl e1 | EInr e1
+  | EFst e1 | ESnd e1 | EInl e1 | EInr e1 | ESucc e1
   | ECall _ e1 -> subst_comp_general f g e1
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_general f g e1; subst_comp_general f g e2
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     subst_comp_general f g e1; subst_comp_general f g e2; subst_comp_general f g e3
   | ECase e1 e2 e3 ->
     subst_comp_general f g e1;
@@ -415,7 +431,7 @@ let rec lem_subst_closed_identity #b (s:sub b) (e:exp) (n:nat) :
     (ensures subst s e == e)
     (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ | EZero -> ()
   | EVar _ -> ()
   | ELam e' ->
     introduce forall (x:var). x < n+1 ==> sub_elam s x == EVar x with begin
@@ -424,13 +440,14 @@ let rec lem_subst_closed_identity #b (s:sub b) (e:exp) (n:nat) :
       end
     end;
     lem_subst_closed_identity (sub_elam s) e' (n+1)
-  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ESucc e'
   | ECall _ e' ->
     lem_subst_closed_identity s e' n
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_subst_closed_identity s e1 n;
     lem_subst_closed_identity s e2 n
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     lem_subst_closed_identity s e1 n;
     lem_subst_closed_identity s e2 n;
     lem_subst_closed_identity s e3 n

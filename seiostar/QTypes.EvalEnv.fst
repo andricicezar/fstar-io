@@ -10,6 +10,7 @@ include QTypes.TypEnv
 (** Evaluation Environment for IOStar: variable -> F* values **)
 type eval_env g =
   FE.restricted_t (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x)))
+
 let empty_eval : eval_env empty =
   FE.on_dom
     (x:var{Some? (empty x)})
@@ -37,23 +38,23 @@ val lem_hd_stack #t #g (fsG:eval_env g) (v:get_Type t)
   : Lemma (
  // (fs_hd fsG == fs_hd (fs_tail (fs_stack fsG v))) /\
    hd (stack fsG v) == v)
-  [SMTPat (hd (stack fsG v))]
+  // [SMTPat (hd (stack fsG v))]
 let lem_hd_stack fsG v = ()
 
 val lem_stack_index #g (fsG:eval_env g) #t (v:get_Type t) : Lemma (
   (forall (x:var). Some? (g x) ==>  index fsG x == index (stack fsG v) (x+1)) /\
   index (stack fsG v) 0 == v)
-  [SMTPat (stack fsG v)]
+  // [SMTPat (stack fsG v)]
 let lem_stack_index fsG v = ()
 
 val lem_index_tail #g #t (fsG:eval_env (extend t g)) : Lemma (
   (forall (x:var). Some? (g x) ==>  index fsG (x+1) == index (tail fsG) x))
-  [SMTPat (tail fsG)]
+  // [SMTPat (tail fsG)]
 let lem_index_tail fsG = ()
 
 val lem_tail_stack_inverse #g (fsG:eval_env g) #t (x:get_Type t)
   : Lemma (tail (stack fsG x) == fsG)
-  [SMTPat (tail (stack fsG x))]
+  // [SMTPat (tail (stack fsG x))]
 let lem_tail_stack_inverse #g fsG #t v =
   let fsG' : eval_env g = tail (stack fsG v) in
   assert (forall x. fsG' x == fsG x);

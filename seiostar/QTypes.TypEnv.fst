@@ -20,7 +20,7 @@ let extend (t:qType) (g:typ_env)
 let fv_in_env (g:typ_env) (e:exp) : Type0 =
   forall (fv:var). fv `FStar.List.Tot.memP` free_vars e ==> Some? (g fv)
 
-let lem_no_fv_is_closed (e:exp) 
+let lem_no_fv_is_closed (e:exp)
   : Lemma
     (requires fv_in_env empty e)
     (ensures is_closed e)
@@ -41,17 +41,18 @@ let rec lem_free_vars_indx_shift (e:exp) (n:nat) :
         (decreases e) =
   let open FStar.List.Tot in
   match e with
-  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ | EZero -> ()
   | EVar _ -> ()
   | ELam e' -> lem_free_vars_indx_shift e' (n+1)
-  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ESucc e'
   | ECall _ e' -> lem_free_vars_indx_shift e' n
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_free_vars_indx_shift e1 n;
     lem_free_vars_indx_shift e2 n;
     append_memP_forall (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
     append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     lem_free_vars_indx_shift e1 n;
     lem_free_vars_indx_shift e2 n;
     lem_free_vars_indx_shift e3 n;
@@ -88,7 +89,7 @@ let lem_sub_elam_inc (s:sub true) (n:nat) :
       introduce _ ==> _ with _. ()
     end
 
-#push-options "--z3rlimit 10"
+#push-options "--z3rlimit 10 --split_queries always"
 let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires
@@ -98,12 +99,12 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     (decreases e) =
   let open FStar.List.Tot in
   match e with
-  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ | EZero -> ()
   | EVar _ -> ()
   | ELam e' ->
     lem_sub_elam_inc s n;
     lem_free_vars_subst_inc (sub_elam s) e' (n+1)
-  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ESucc e'
   | ECall _ e' ->
     lem_free_vars_subst_inc s e' n
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
@@ -111,7 +112,8 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     lem_free_vars_subst_inc s e2 n;
     append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s e2) n);
     append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
-  | EIf e1 e2 e3 ->
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
     lem_free_vars_subst_inc s e1 n;
     lem_free_vars_subst_inc s e2 n;
     lem_free_vars_subst_inc s e3 n;
@@ -192,3 +194,19 @@ let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
 let lem_fv_in_env_call (g:typ_env) (op:io_ops) (e:exp) :
   Lemma (fv_in_env g e <==> fv_in_env g (ECall op e))
   = ()
+
+let lem_fv_in_env_zero (g:typ_env) :
+  Lemma (fv_in_env g EZero)
+  = ()
+
+let lem_fv_in_env_succ (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (ESucc e) <==> fv_in_env g e)
+  = ()
+
+#push-options "--z3rlimit 10"
+let lem_fv_in_env_nrec (g:typ_env) (e1 e2 e3:exp) :
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) <==> fv_in_env g (ENRec e1 e2 e3))
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars_indx e1 0 @ free_vars_indx e2 0) (free_vars_indx e3 0);
+    append_memP_forall (free_vars_indx e1 0) (free_vars_indx e2 0)
+#pop-options
