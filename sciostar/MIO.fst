@@ -201,14 +201,14 @@ let dm_gmio_partial_return
   dm_partial_return mio_ops (mio_sig mst) event mio_wps pre
 
 val lift_pure_dm_gmio :
-  a: Type ->
+  a: Type u#a ->
   [@@@effect_param](mst: mstate)-> // syntax ok?
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (dm_gmio a mst NoOps (wp_lift_pure_hist w))
-let lift_pure_dm_gmio a mst w f = 
+let lift_pure_dm_gmio a mst w f =
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   let lhs : dm_gmio _ mst NoOps _ = dm_gmio_partial_return mst (as_requires w) in
   let rhs = (fun (pre:(squash (as_requires w))) -> dm_gmio_return a (f pre) mst) in
   let m = dm_gmio_bind _ _ mst NoOps _ NoOps _ lhs rhs in

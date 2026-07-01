@@ -33,8 +33,8 @@ let another_lemma (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) p h :
     (requires ((forall x. (wp3 x) ⊑ (wp2 x)) /\ hist_bind wp1 wp2 p h))
     (ensures (hist_bind wp1 wp3 p h)) = ()
 
-let another_lemma' (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) : 
-  Lemma 
+let another_lemma' (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) :
+  Lemma
     (requires ((forall x. (wp3 x) ⊑ (wp2 x))))
     (ensures (hist_bind wp1 wp3 ⊑ hist_bind wp1 wp2)) = ()
 
@@ -162,7 +162,7 @@ let lift_pure_dm (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event
   (f:(eqtype_as_type unit -> PURE a w)) : 
   dm op s event cmd_wp a (wp_lift_pure_hist w) =
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   let lhs = dm_partial_return op s event cmd_wp (as_requires w) in
   let rhs = (fun (pre:(squash (as_requires w))) -> dm_return op s event cmd_wp a (f pre)) in
   let m = dm_bind op s event cmd_wp _ _ _ _ lhs rhs in

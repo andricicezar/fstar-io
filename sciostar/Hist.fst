@@ -66,8 +66,8 @@ let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -
   fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
 
 unfold
-let wp_lift_pure_hist (#event_type:Type) (w : pure_wp 'a) : hist #event_type 'a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+let wp_lift_pure_hist (#event_type:Type u#e) (#a:Type u#a) (w : pure_wp a) : hist #event_type a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w;
   fun p _ -> w (p [])
 
 let lemma_wp_lift_pure_hist_implies_as_requires #a #event_type w :

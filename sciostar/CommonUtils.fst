@@ -30,11 +30,11 @@ unfold let inl_app #a #b (f:a -> b) : resexn a -> resexn b =
 
 let cdr #a (_, (x:a)) : a = x
 
-let elim_pure #a #wp ($f : unit -> PURE a wp) p
+let elim_pure (#a:Type u#a) #wp ($f : unit -> PURE a wp) p
  : Pure a (requires (wp p)) (ensures (fun r -> p r))
   //: PURE a (fun p' -> wp p /\ (forall r. p r ==> p' r))
    // ^ basically this, requires monotonicity
- = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+ = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
    f ()
 
 let suffix_of (l1 l2: list 'a)

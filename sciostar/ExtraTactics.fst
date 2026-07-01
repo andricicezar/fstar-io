@@ -1,6 +1,6 @@
 module ExtraTactics
 
-open FStar.Tactics
+open FStar.Tactics.V1
 
 (** This was just a exercise for me. This is equivalent to `:|` operator from Dafny **)
 val forall_x_0 :

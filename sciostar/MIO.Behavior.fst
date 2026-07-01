@@ -48,7 +48,7 @@ let _beh mst ws =
 (** used for whole programs **)
 [@@ "opaque_to_smt"]
 val beh : mst:mstate -> (unit -> MIO int AllOps mst (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
-let beh mst = on_domain _ (fun ws -> _beh mst ws)
+let beh mst = on_dom _ (fun ws -> _beh mst ws)
 
 val _beh_ctx : mst:mstate -> #pre:(trace -> Type0) -> (unit -> MIO int AllOps mst pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
 let _beh_ctx mst ws h =
@@ -57,4 +57,4 @@ let _beh_ctx mst ws h =
 (** used for contexts **)
 //[@@ "opaque_to_smt"]
 val beh_ctx : mst:mstate -> #pre:(trace -> Type0) -> (unit -> MIO int AllOps mst pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
-let beh_ctx mst #pre = on_domain _ (fun ws -> _beh_ctx mst #pre ws)
+let beh_ctx mst #pre = on_dom _ (fun ws -> _beh_ctx mst #pre ws)
