@@ -1,24 +1,7 @@
 # Artifact for "Misquoted No More: Securely Extracting F\* Programs with IO"
 
-This contains the artifact associated with the ICFP 2026 submission with the name:
-"[Misquoted No More: Securely Extracting F\* Programs with IO]()".
-
-To see how we implemented refinements check the following files:
-1. In `QTypes.fst` to see how we added refinements to the supported types
-2. In `RQ.TypingRelation.fst` to see how we updated the typing relation:
-  a) The typing relation is now indexed by a pre-condition.
-  b) The typing rule `QRef` that changes the refinement of a value.
-3. In `ExamplesRefs.fst` and `ExamplesIORefinements.fst` to see what
-  kind of examples we can do, and `RQ.TypingRelation.Tests.fst` to see
-  how the manually written derivations look like.
-
-The extension is still ongoing.
-After extending IO\* with refinements, we managed to update compilation and
-backtranslation and reprove that SEIO* satisfies RrHP.
-The proof of RrHP contains one admitted compatibility lemma that we did not
-have time to finish, but should be provable. 
-
-The artifact is admit free.
+This contains the artifact associated with the ICFP 2026 paper with the name:
+"[Misquoted No More: Securely Extracting F\* Programs with IO](https://arxiv.org/abs/2602.19973)".
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
@@ -46,8 +29,7 @@ We list where the definitions and theorems of the paper are.
 | Syntax and semantics of $\lambda_{io}$ | `LambdaIO.fst` as type constructors `exp`, `step`, and `steps` |
 | Behaviors of $\lambda_{io}$ expressions | `LogRel.Semantics.fst` as `e_beh` |
 | Syntax of $IO^{\star}$ | `IOStar.fst` as type constructor `io` |
-| Functor part of predicate transformer monad | `Hist.fst` |
-| Semantics of $IO^{\star}$ | `IOStar.fst` as functions `op_wp` and `theta` |
+| Semantics of $IO^{\star}$ | `fs_beh` in `LogRel.Semantics.fst`, a synonym for `thetaP` in `IOStar.fst` |
 | Behaviors of $IO^{\star}$ computations | `LogRel.Semantics.fst` as `fs_beh` |
 | Predicate on types for logical relation | `QTypes.fst` as type constructor `type_quotation` |
 | Target-to-source logical relation | `LogRelTargetSource.fst` |
@@ -59,6 +41,9 @@ We list where the definitions and theorems of the paper are.
 | Theorem 5.2 (compiler correctness) | `RrHP.fst` as `compiler_correctness` (statement) and `proof_compiler_correctness` (proof) |
 | Theorem 5.3 (RrHP) | `RrHP.fst` as `rrhp` (statement) and `proof_rrhp` (proof) |
 | Backtranslation | `Backtranslation.fst` |
+| **Section 6** - Refinements | |
+| Type rule `QRef` | `RQ.TypingRelation.fst` |
+| Examples using refinements | `ExamplesRefs.fst` and `ExamplesIORefinements.fst` |
 | **Section 7** - Running SEIO* | |
 | Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/LambdaIOToLambdaBox.fst` |
 | Compiling running example | `lambdabox/LambdaBoxExamples.fst` |
