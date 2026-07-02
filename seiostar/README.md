@@ -26,11 +26,12 @@ We list where the definitions and theorems of the paper are.
 | Traces | `Trace.fst` |
 | Metaprogram | `RQ.Metaprogram.fst` as function `generate_derivation` |
 | **Section 4** - Relating trace-producing semantics | |
+| Functor part of predicate transformer monad | `hist` in `IOStar.fst` |
 | Syntax and semantics of $\lambda_{io}$ | `LambdaIO.fst` as type constructors `exp`, `step`, and `steps` |
 | Behaviors of $\lambda_{io}$ expressions | `LogRel.Semantics.fst` as `e_beh` |
-| Syntax of $IO^{\star}$ | `IOStar.fst` as type constructor `io` |
-| Semantics of $IO^{\star}$ | `fs_beh` in `LogRel.Semantics.fst`, a synonym for `thetaP` in `IOStar.fst` |
-| Behaviors of $IO^{\star}$ computations | `LogRel.Semantics.fst` as `fs_beh` |
+| Syntax of $IO^{\star}$ | `IOStar.fst` as type constructor `io`, and the IO operations `io_ops`, `io_args` and `io_res` in `Trace.fst` |
+| Semantics of $IO^{\star}$ | `Trace.fst`: `io_pre`, `io_post` and `theta` in `IOStar.fst` |
+| Behaviors of $IO^{\star}$ computations | `LogRel.Semantics.fst` as `fs_beh`, a synonym for `theta` in `IOStar.fst` |
 | Predicate on types for logical relation | `QTypes.fst` as type constructor `type_quotation` |
 | Target-to-source logical relation | `LogRelTargetSource.fst` |
 | Source-to-target logical relation | `LogRelSourceTarget.fst` |
