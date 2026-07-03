@@ -436,7 +436,6 @@ instance exportable_arrow_with_no_pre_and_no_post
       match d1.import x (typ_left eff_dcs) with
       | Inl x' -> begin
         let r : resexn t2 = f x' in
-        assert (Inl? r \/ Inr? r);
         match r with
         | Inl x'' -> Inl (d2.export (typ_right eff_dcs) x'')
         | Inr err -> Inr err
