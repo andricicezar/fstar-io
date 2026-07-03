@@ -192,3 +192,45 @@ let comp_rrhc_1' (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)
    proof separately, and the two never meet. *)
 let comp_rrhc () : Lemma (rrhc (comp u#0 u#0 u#0 u#0)) =
   rrhc_intro (comp u#0 u#0 u#0 u#0) (backtranslate_ctx u#0 u#0 u#0 u#0) (comp_rrhc_1' u#0 u#0 u#0 u#0)
+
+(** ** Soundness, in two other ways **)
+
+(* 1. Soundness as a corollary of RrHC. The pointwise RrHC statement
+   (`comp_rrhc_2`, with the backtranslated context as witness) gives an
+   *equality* between the behaviors of the source and target whole
+   programs, which in particular gives the inclusion required by
+   soundness. Note that the quantified criterion (`comp_rrhc_0`) alone
+   would only give soundness with respect to *some* source context, since
+   it does not reveal that the witness is the backtranslation. *)
+let soundness_via_rrhc (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
+  let it = comp_int_src_tgt i in
+  let cs : ctx_src i = backtranslate_ctx #i ct in
+  let pt : prog_tgt it = (compile_pprog #i ps) in
+  let wt : whole_tgt = (pt `link_tgt` ct) in
+  let ws : whole_src = (ps `link_src` cs) in
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws)
+) =
+  comp_rrhc_2 i ct ps
+
+(* 2. A direct semantic proof of soundness, using neither the RrHC
+   statements nor the syntactic equality of whole programs: the trace
+   inclusion is proved pointwise. After unfolding the two behavior
+   functions, both sides reduce to the traces of the very same
+   computation, `ps` applied to the imported context, so each trace of
+   the target whole program is trivially a trace of the source one. *)
+let soundness_direct (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
+  let it = comp_int_src_tgt i in
+  let cs : ctx_src i = backtranslate_ctx #i ct in
+  let pt : prog_tgt it = (compile_pprog #i ps) in
+  let wt : whole_tgt = (pt `link_tgt` ct) in
+  let ws : whole_src = (ps `link_src` cs) in
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws)
+) =
+  assert (tgt_language.beh (compile_pprog #i ps `link_tgt` ct) ==
+          src_language.beh (ps `link_src` (backtranslate_ctx #i ct)))
+  by (norm [delta_only [`%tgt_language; `%src_language; `%beh_tgt; `%beh_src;
+                        `%link_tgt; `%link_src; `%compile_pprog; `%compile_whole;
+                        `%backtranslate_ctx; `%comp_int_src_tgt;
+                        `%Mklanguage?.beh];
+            iota; zeta; primops];
+      trefl ())
