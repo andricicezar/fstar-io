@@ -50,6 +50,7 @@ let process_connection
   (req_handler : req_handler (IOOps ⊕ fl)) :
   MIO unit (IOOps⊕fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
+  every_request_gets_a_response_append ();
   introduce forall h lthandler lt lt'. enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
@@ -59,6 +60,14 @@ let process_connection
   with begin
     introduce enforced_locally sgm h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
+  end ;
+  introduce forall h lthandler limit r res wr. enforced_locally sgm h lthandler ==> every_request_gets_a_response ([ ERead Prog (client, limit) (Inl r) ] @ lthandler @ [ EWrite Prog (client, res) wr ])
+  with begin
+    introduce enforced_locally sgm h lthandler ==> every_request_gets_a_response ([ ERead Prog (client, limit) (Inl r) ] @ lthandler @ [ EWrite Prog (client, res) wr ])
+    with _. begin
+      assert (every_request_gets_a_response ([ ERead Prog (client, limit) (Inl r) ] @ [ EWrite Prog (client, res) wr ])) ;
+      ergar_pi_irr h lthandler [ ERead Prog (client, limit) (Inl r) ] [ EWrite Prog (client, res) wr ]
+    end
   end ;
   match get_req client with
   | Inr _ -> sendError400 client
@@ -218,9 +227,18 @@ let help_import fl wf eff_dcs client req send :
   if b then r
   else Inr Contract_failure
 
+(* This dictionary used to be produced by a generic `interm_arrow3` instance
+   (an instance for any 3-ary arrow, formerly in Compiler.Languages). The SMT
+   typing axiom of such an arrow type, quantified over four types, is very
+   expensive for the solver, so the (trivial) dictionary is written directly
+   at its only use site instead. *)
+let interm_handler_ityp (fl:erased tflag)
+  : interm (file_descr -> Bytes.bytes -> (export_send #fl).ityp -> MIOpi (resexn unit) fl Utils.sgm mymst) fl Utils.sgm mymst =
+  { mldummy = () }
+
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.sgm mymst check_handler_post = {
   ityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.sgm mymst;
-  c_ityp = interm_arrow3 fl Utils.sgm mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
+  c_ityp = interm_handler_ityp fl;
   safe_import = help_import fl
 }
 

@@ -90,6 +90,13 @@ let (≼) (flag1:tflag) (flag2:tflag) : Type0 =
 let plus_compat_le (f1 f2 : tflag) : Lemma (f1 ≼ (f1⊕f2)) = ()
 let plus_comm      (f1 f2 : tflag) : Lemma (f1⊕f2 == f2⊕f1) = ()
 
+(* Reflexivity of the flag order, needed to discharge the flag side of the
+   effect `subcomp` (`flag1 ≼ flag2`) that newer F* no longer simplifies for
+   the reflexive case. NB: do not also add `⊕`-collapsing SMT patterns (e.g.
+   `NoOps ⊕ f == f`) here — they fire inside the higher-order arrow instances'
+   effect WPs and make those queries diverge. *)
+let le_refl      (f:tflag) : Lemma (f ≼ f)          [SMTPat (f ≼ f)]     = ()
+
 let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : mio mst 'a) :
   Lemma (satisfies m f1 ==> satisfies m f2) =
   match m with

@@ -75,10 +75,18 @@ let tgt_language : language = {
 }
 
 (** ** Compile interfaces **)
+(* Named functions instead of lambdas in the record fields: newer F* versions
+   do not encode syntactically identical lambdas that arise at different
+   elaboration sites to the same SMT term, which makes the projections of
+   `comp_int_src_tgt` unrelatable to their definitions by the solver. *)
+let comp_int_pt (i:src_interface) (fl:erased tflag) : Type = (i.pt_exportable fl).ityp
+let comp_int_pt_weak (i:src_interface) (fl:erased tflag) : interm (comp_int_pt i fl) fl i.sgm i.mst =
+  (i.pt_exportable fl).c_ityp
+
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
   mst = i.mst;
-  pt = (fun fl -> (i.pt_exportable fl).ityp);
-  pt_weak = (fun fl -> (i.pt_exportable fl).c_ityp);
+  pt = comp_int_pt i;
+  pt_weak = comp_int_pt_weak i;
 
   sgm = i.sgm;
   pi = i.pi;
@@ -95,7 +103,11 @@ let compile_whole (| mst, _, ws |) = (| mst, ws |)
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s =
   let eff_dcs = make_dcs_eff i.pt_dcs in
-  (i.pt_exportable AllOps).export eff_dcs (p_s #AllOps)
+  let d : exportable (i.pt AllOps) AllOps i.sgm i.mst i.pt_dcs = i.pt_exportable AllOps in
+  let r : d.ityp = d.export eff_dcs (p_s #AllOps) in
+  assert (prog_tgt (comp_int_src_tgt i) == comp_int_pt i AllOps);
+  assert (comp_int_pt i AllOps == d.ityp);
+  coerce_eq #_ #(prog_tgt (comp_int_src_tgt i)) () r
 
 // val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
 // let compile_ctx #i c_s =
@@ -119,16 +131,6 @@ let comp : compiler = {
   rel_traces = (==);
 }
 
-(** ** Soundness **)
-let soundness (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
-  let it = comp_int_src_tgt i in
-  let cs : ctx_src i = backtranslate_ctx #i ct in
-  let pt : prog_tgt it = (compile_pprog #i ps) in
-  let wt : whole_tgt = (pt `link_tgt` ct) in
-  let ws : whole_src = (ps `link_src` cs) in
-  tgt_language.beh (wt) `subset_of` src_language.beh (ws)
-) = ()
-
 (** ** RrHC **)
 let syntactic_equality (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
   let it = comp_int_src_tgt i in
@@ -139,6 +141,24 @@ let syntactic_equality (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:p
   compile_whole ws == wt
 ) = ()
 
+(* The behavior of a compiled whole program is the behavior of the source
+   whole program. Stated as a separate lemma to keep the verification
+   condition of `soundness` small. *)
+let beh_compile_whole (ws:whole_src) : Lemma (beh_tgt (compile_whole ws) == beh_src ws) =
+  let (| mst, psi, f |) = ws in ()
+
+(** ** Soundness **)
+let soundness (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
+  let it = comp_int_src_tgt i in
+  let cs : ctx_src i = backtranslate_ctx #i ct in
+  let pt : prog_tgt it = (compile_pprog #i ps) in
+  let wt : whole_tgt = (pt `link_tgt` ct) in
+  let ws : whole_src = (ps `link_src` cs) in
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws)
+) =
+  syntactic_equality i ct ps;
+  beh_compile_whole (ps `link_src` (backtranslate_ctx #i ct))
+
 let comp_rrhc_2 (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
   let it = comp_int_src_tgt i in
   let cs : ctx_src i = backtranslate_ctx #i ct in
@@ -146,7 +166,8 @@ let comp_rrhc_2 (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src
   let wt : whole_tgt = (pt `link_tgt` ct) in
   let ws : whole_src = (ps `link_src` cs) in
   beh_src ws == beh_tgt wt) =
-  syntactic_equality i ct ps
+  syntactic_equality i ct ps;
+  beh_compile_whole (ps `link_src` (backtranslate_ctx #i ct))
 
 let comp_rrhc_1 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) (ps:comp.source.pprog i) : Lemma (
   let cs : comp.source.ctx i = backtranslate_ctx #i ct in
@@ -163,6 +184,13 @@ let comp_rrhc_0 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i))
   with (backtranslate_ctx #i ct)
   and Classical.forall_intro (comp_rrhc_1 i ct)
 
-val comp_rrhc : unit -> Lemma (rrhc comp)
-let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) =
-  Classical.forall_intro_2 (comp_rrhc_0)
+let comp_rrhc_1' (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) (ps:comp.source.pprog i) : Lemma (
+  comp.source.beh (ps `comp.source.link #i` (backtranslate_ctx #i ct)) `comp.rel_traces`
+  comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
+  comp_rrhc_1 i ct ps
+
+(* The universe instantiation of `comp` is fixed: without the annotations,
+   newer F* versions generalize the universes of the statement and of the
+   proof separately, and the two never meet. *)
+let comp_rrhc () : Lemma (rrhc (comp u#0 u#0 u#0 u#0)) =
+  rrhc_intro (comp u#0 u#0 u#0 u#0) (backtranslate_ctx u#0 u#0 u#0 u#0) (comp_rrhc_1' u#0 u#0 u#0 u#0)

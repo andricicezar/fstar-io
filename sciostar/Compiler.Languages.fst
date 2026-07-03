@@ -118,13 +118,10 @@ type interm_arrow_typ fl sgm mst (t1 t2:Type) = t1 -> MIOpi t2 fl sgm mst
 instance interm_arrow fl sgm mst #t1 (d1:interm t1 fl sgm mst) #t2 (d2:interm t2 fl sgm mst) : interm (interm_arrow_typ fl sgm mst t1 t2) fl sgm mst =
   { mldummy = () }
 
-instance interm_arrow3 fl sgm mst
-  t1 {| d1:interm t1 fl sgm mst |}
-  t2 {| d2:interm t2 fl sgm mst |}
-  t3 {| d3:interm t3 fl sgm mst |}
-  t4 {| d4:interm t4 fl sgm mst |}
-  : interm (t1 -> t2 -> t3 -> MIOpi t4 fl sgm mst) fl sgm mst =
-  { mldummy = () }
+(* NOTE: `interm_arrow3` (an instance for 3-ary arrows) lives in
+   case-studies/webserver/WebServer.fst, its only user. Its SMT typing axiom
+   (quantified over four types) is very expensive for the solver, so it should
+   not be in scope for the rest of the development. *)
 
 instance interm_bool fl sgm mst : interm bool fl sgm mst = { mldummy = () }
 instance interm_int fl sgm mst : interm int fl sgm mst = { mldummy = () }

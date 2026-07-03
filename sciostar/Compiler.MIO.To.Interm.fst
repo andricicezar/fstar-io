@@ -36,13 +36,13 @@ type tree (a: Type) =
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
 (** TODO: refactor these into two utils **)
-let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a = 
-  match t with 
+let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
+  match t with
   | Node _ lt _ -> lt
   | EmptyNode lt _ -> lt
 
-let right (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a = 
-  match t with 
+let right (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
+  match t with
   | Node _ _ rt -> rt
   | EmptyNode _ rt -> rt
   
@@ -94,6 +94,66 @@ let rec map_ext (t:tree 'a) (f:'a -> 'b) (g : 'a -> 'b)
   | EmptyNode lhs rhs -> map_ext lhs f g; map_ext rhs f g
   | Node x lhs rhs -> map_ext lhs f g; map_ext rhs f g
 
+(* map_tree preserves the shape of a tree, and commutes with `left`/`right`.
+   Stated with SMTPats to help newer F* versions prove the obligations that
+   arise when `left`/`right` are applied to trees only known to be
+   Node/EmptyNode through `equal_trees`. *)
+let map_tree_shape (t:tree 'a) (f:'a -> 'b)
+  : Lemma ((Node? (map_tree t f) <==> Node? t) /\
+           (EmptyNode? (map_tree t f) <==> EmptyNode? t) /\
+           (Leaf? (map_tree t f) <==> Leaf? t))
+    [SMTPat (map_tree t f)]
+  = match t with
+    | Leaf -> ()
+    | EmptyNode _ _ -> ()
+    | Node _ _ _ -> ()
+
+let map_tree_left (t:(tree 'a){Node? t \/ EmptyNode? t}) (f:'a -> 'b)
+  : Lemma (left (map_tree t f) == map_tree (left t) f)
+    [SMTPat (map_tree (left t) f)]
+  = ()
+
+let map_tree_right (t:(tree 'a){Node? t \/ EmptyNode? t}) (f:'a -> 'b)
+  : Lemma (right (map_tree t f) == map_tree (right t) f)
+    [SMTPat (map_tree (right t) f)]
+  = ()
+
+(* Directly relates the shape of two trees related by `equal_trees`/`map_tree`,
+   as in the refinement of `typ_eff_dcs` below. *)
+let equal_trees_shape (t1:tree 'a) (t2:tree 'b) (f:'b -> 'a)
+  : Lemma (requires equal_trees t1 (map_tree t2 f))
+          (ensures (Node? t1 <==> Node? t2) /\
+                   (EmptyNode? t1 <==> EmptyNode? t2) /\
+                   (Leaf? t1 <==> Leaf? t2))
+    [SMTPat (equal_trees t1 (map_tree t2 f))]
+  = equal_trees_prop t1 (map_tree t2 f);
+    map_tree_shape t2 f
+
+(* Same, for the left/right subtrees. No SMTPat: the conclusion contains a
+   term that matches the premise's pattern, which would create an E-matching
+   loop. These are meant to be called explicitly. *)
+let equal_trees_left (t1:tree 'a) (t2:tree 'b) (f:'b -> 'a)
+  : Lemma (requires equal_trees t1 (map_tree t2 f) /\ (Node? t2 \/ EmptyNode? t2))
+          (ensures equal_trees (left t1) (map_tree (left t2) f))
+  = equal_trees_prop t1 (map_tree t2 f);
+    map_tree_shape t2 f;
+    map_tree_left t2 f;
+    equal_trees_prop (left t1) (map_tree (left t2) f)
+
+let equal_trees_right (t1:tree 'a) (t2:tree 'b) (f:'b -> 'a)
+  : Lemma (requires equal_trees t1 (map_tree t2 f) /\ (Node? t2 \/ EmptyNode? t2))
+          (ensures equal_trees (right t1) (map_tree (right t2) f))
+  = equal_trees_prop t1 (map_tree t2 f);
+    map_tree_shape t2 f;
+    map_tree_right t2 f;
+    equal_trees_prop (right t1) (map_tree (right t2) f)
+
+let equal_trees_root (t1:tree 'a) (t2:tree 'b) (f:'b -> 'a)
+  : Lemma (requires equal_trees t1 (map_tree t2 f) /\ Node? t2)
+          (ensures Node? t1 /\ root t1 == f (root t2))
+  = equal_trees_prop t1 (map_tree t2 f);
+    map_tree_shape t2 f
+
 (* From h', an extension of h, we can obtain the difference
 (i.e. the local trace) just from the lengths. *)
 let get_local_trace (h':trace) (h:trace) :
@@ -131,16 +191,19 @@ type eff_dc_typ (fl:erased tflag) (mst:mstate) (#t1 #t2:Type) (dc:dc_typ mst #t1
              (fun h0 (| s0, _ |) lt -> s0 `mst.abstracts` h0 /\ lt == [])
 
 (* Lifting a runtime check into an effectful check *)
-val enforce_dc : (#mst:mstate) -> (#argt:Type u#a) -> (#rett:Type u#b) -> 
-  dc:dc_typ mst #argt #rett -> eff_dc_typ AllOps mst dc
 #push-options "--compat_pre_core 1" // fixme
+let enforce_dc_cont (#mst:mstate) (#argt:Type u#a) (#rett:Type u#b)
+  (dc:dc_typ mst #argt #rett) (x:argt) (s0:mst.typ)
+  : eff_dc_typ_cont AllOps mst dc x s0
+  = fun y ->
+      let s1 = get_state () in
+      (hide s1, dc x s0 y s1)
+
+val enforce_dc : (#mst:mstate) -> (#argt:Type u#a) -> (#rett:Type u#b) ->
+  dc:dc_typ mst #argt #rett -> eff_dc_typ AllOps mst dc
 let enforce_dc #mst #argt #rett dc x =
   let s0 = get_state () in
-  let cont : eff_dc_typ_cont AllOps mst dc x s0 =
-    (fun y -> (
-      let s1 = get_state () in
-      (hide s1, dc x s0 y s1))) in
-  (| hide s0,  cont |)
+  (| hide s0, enforce_dc_cont dc x s0 |)
 #pop-options
 
 // todo: in HO cases, t1 or t2 should be unit since one can not write a
@@ -155,24 +218,91 @@ let check #mst (ctr:pck_dc mst) (arg:arg_typ ctr) (s0:mst.typ) (ret:ret_typ ctr)
   ctr._3 arg s0 ret s1
 
 
-type eff_pck_dc (fl:erased tflag) mst = ctr:pck_dc mst & eff_dc_typ fl mst ctr._3
+(* The type family of the second component is a named function (rather than
+   the lambda F* would infer for `ctr:pck_dc mst & eff_dc_typ fl mst ctr._3`):
+   newer F* versions do not encode syntactically identical lambdas that arise
+   at different elaboration sites to the same SMT term, which makes the
+   refinement of `typ_eff_dcs` below unusable by the solver. A named function
+   is always encoded to the same SMT term. *)
+let eff_dc_typ_pck (fl:erased tflag) (mst:mstate) (ctr:pck_dc mst) : Type = eff_dc_typ fl mst ctr._3
+
+type eff_pck_dc (fl:erased tflag) mst = dtuple2 (pck_dc mst) (eff_dc_typ_pck fl mst)
 
 val make_dc_eff : mst:mstate -> pck_dc u#a u#b mst -> eff_pck_dc u#a u#b AllOps mst 
 let make_dc_eff mst r = (| r, (enforce_dc #mst r._3) |)
 
+(* `unfold` is needed with newer F* versions: without it, the refinement
+   formula below is encoded to the SMT solver with a lambda token (for the
+   implicit instantiation of `dfst`) that differs from the token generated
+   when the abbreviation is re-elaborated at use sites, making the two
+   occurrences of the refinement unrelatable by the solver.
+
+   The refinement also carries the relation between the shapes of `dcs` and
+   `eff_dcs`. This is implied by `equal_trees dcs (map_tree eff_dcs dfst)`
+   (see `equal_trees_shape`), but making it explicit means the SMT solver
+   does not have to derive it by quantifier instantiation each time `left`,
+   `right` or `root` is applied to one of the two trees. *)
+unfold
 type typ_eff_dcs (fl:erased tflag) mst (dcs:tree (pck_dc mst)) =
-  eff_dcs:(tree (eff_pck_dc fl mst)){equal_trees dcs (map_tree eff_dcs dfst)}
+  eff_dcs:(tree (eff_pck_dc fl mst)){
+    equal_trees dcs (map_tree eff_dcs dfst) /\
+    (Node? dcs <==> Node? eff_dcs) /\
+    (EmptyNode? dcs <==> EmptyNode? eff_dcs) /\
+    (Leaf? dcs <==> Leaf? eff_dcs)}
 
 (* Two helpers, to guide F* *)
-let typ_left (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst))
-  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t})
-  : typ_eff_dcs fl mst (left dcs)
-  = left t
+(* Total lemmas about values of type `typ_eff_dcs`. Calling these does not
+   produce any proof obligation (they have no precondition), which makes them
+   robust helpers at use sites where the refinement of `typ_eff_dcs` is hard
+   for the SMT solver to exploit directly. *)
+let typ_shape (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst)) (t:typ_eff_dcs fl mst dcs)
+  : Lemma ((Node? dcs <==> Node? t) /\
+           (EmptyNode? dcs <==> EmptyNode? t) /\
+           (Leaf? dcs <==> Leaf? t))
+  = equal_trees_shape dcs t dfst
 
-let typ_right (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst))
-  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t})
-  : typ_eff_dcs fl mst (right dcs)
-  = right t
+let typ_root (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst)) (t:typ_eff_dcs fl mst dcs)
+  : Lemma (requires Node? t)
+          (ensures Node? dcs /\ root dcs == dfst (root t))
+  = equal_trees_root dcs t dfst
+
+(* Specialization of `equal_trees_shape` to the refinement of `typ_eff_dcs`,
+   with an SMTPat so that the SMT solver can relate the shapes of `dcs` and
+   `eff_dcs` whenever the refinement is in the context. All the binders are
+   first-order, which keeps the instantiation cheap. *)
+let typ_eff_dcs_shape (fl:erased tflag) (mst:mstate) (dcs:tree (pck_dc mst)) (t:tree (eff_pck_dc fl mst))
+  : Lemma (requires equal_trees dcs (map_tree t dfst))
+          (ensures (Node? dcs <==> Node? t) /\
+                   (EmptyNode? dcs <==> EmptyNode? t) /\
+                   (Leaf? dcs <==> Leaf? t))
+    [SMTPat (equal_trees dcs (map_tree t dfst))]
+  = equal_trees_shape dcs t dfst
+
+val typ_left : (#fl:erased tflag) -> (#mst:mstate) -> (#dcs:tree (pck_dc mst)) ->
+  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t}) ->
+  typ_eff_dcs fl mst (left dcs)
+let typ_left #fl #mst #dcs t
+  = equal_trees_left dcs t dfst;
+    equal_trees_shape (left dcs) (left t) dfst;
+    left t
+
+val typ_right : (#fl:erased tflag) -> (#mst:mstate) -> (#dcs:tree (pck_dc mst)) ->
+  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t}) ->
+  typ_eff_dcs fl mst (right dcs)
+let typ_right #fl #mst #dcs t
+  = equal_trees_right dcs t dfst;
+    equal_trees_shape (right dcs) (right t) dfst;
+    right t
+
+val typ_empty_node : (#fl:erased tflag) -> (#mst:mstate) -> (#dcs1:tree (pck_dc mst)) -> (#dcs2:tree (pck_dc mst)) ->
+  (t1:typ_eff_dcs fl mst dcs1) -> (t2:typ_eff_dcs fl mst dcs2) ->
+  typ_eff_dcs fl mst (EmptyNode dcs1 dcs2)
+let typ_empty_node #fl #mst #dcs1 #dcs2 t1 t2
+  = equal_trees_prop dcs1 (map_tree t1 dfst);
+    equal_trees_prop dcs2 (map_tree t2 dfst);
+    assert_norm (map_tree (EmptyNode t1 t2) dfst == EmptyNode (map_tree t1 dfst) (map_tree t2 dfst));
+    equal_trees_prop (EmptyNode dcs1 dcs2) (map_tree (EmptyNode t1 t2) dfst);
+    EmptyNode t1 t2
   
 let cong (#t1 #t2 : tree 'a) (f : 'a -> 'b) (_ : squash (t1 == t2)) : squash (map_tree t1 f == map_tree t2 f) = ()
 
@@ -192,6 +322,8 @@ let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs AllOps mst dcs =
     == { map_id dcs }
     dcs;
   };
+  equal_trees_prop dcs (map_tree r dfst);
+  equal_trees_shape dcs r dfst;
   r
 
 class exportable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mstate) (dcs:tree (pck_dc u#c u#d mst)) = {
@@ -230,27 +362,27 @@ instance interm_safe_importable_super styp fl pi mst dcs (d : safe_importable st
 instance interm_is_exportable (#fl:erased tflag) (#pi:policy_spec) #mst (#dcs:(tree (pck_dc mst)){Leaf? dcs}) t {| d1: interm t fl pi mst |} : exportable t fl pi mst dcs = {
   ityp = t;
   c_ityp = solve;
-  export = (fun Leaf x -> x)
+  export = (fun _ x -> x)
 }
 
 instance exportable_unit (#fl:erased tflag) (#pi:policy_spec) #mst : exportable unit fl pi mst Leaf = {
   ityp = unit;
   c_ityp = solve;
-  export = (fun Leaf () -> ())
+  export = (fun _ () -> ())
 }
 
 instance exportable_file_descr (#fl:erased tflag) (#pi:policy_spec) #mst : 
   exportable file_descr fl pi mst Leaf = {
   ityp = file_descr;
   c_ityp = solve;
-  export = (fun Leaf fd -> fd)
+  export = (fun _ fd -> fd)
 }
 
 instance exportable_bytes (#fl:erased tflag) (#pi:policy_spec) #mst :
   exportable Bytes.bytes fl pi mst Leaf = {
   ityp = Bytes.bytes;
   c_ityp = solve;
-  export = (fun Leaf b -> b)
+  export = (fun _ b -> b)
 }
 
 instance exportable_refinement (#fl:erased tflag) (#pi:policy_spec) #mst (#dcs:tree (pck_dc mst)) t {| d:exportable t fl pi mst dcs |} (p : t -> Type0) : exportable (x:t{p x}) fl pi mst dcs = {
@@ -275,7 +407,8 @@ instance exportable_pair
   Tot (exportable (t1 * t2) fl pi mst dcs) = {
   ityp = d1.ityp * d2.ityp;
   c_ityp = solve;
-  export = (fun eff_dcs (x, y) -> (d1.export (left eff_dcs) x, d2.export (right eff_dcs) y));
+  export = (fun eff_dcs (x, y) ->
+    (d1.export (typ_left eff_dcs) x, d2.export (typ_right eff_dcs) y));
 }
 
 instance exportable_either
@@ -284,8 +417,9 @@ instance exportable_either
   Tot (exportable (either t1 t2) fl pi mst dcs) = {
   ityp = either d1.ityp d2.ityp;
   c_ityp = solve;
-  export = (fun eff_dcs x -> 
-      match x with | Inl x -> Inl (d1.export (left eff_dcs) x) | Inr x -> Inr (d2.export (right eff_dcs) x))
+  export = (fun eff_dcs x ->
+      assert (Inl? x \/ Inr? x);
+      match x with | Inl x -> Inl (d1.export (typ_left eff_dcs) x) | Inr x -> Inr (d2.export (typ_right eff_dcs) x))
 }
 
 (** *** Exportable arrows **)
@@ -299,10 +433,12 @@ instance exportable_arrow_with_no_pre_and_no_post
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
     export = (fun eff_dcs (f:(t1 -> MIOpi (resexn t2) fl pi mst)) (x:d1.ityp) ->
-      match d1.import x (left eff_dcs) with
+      match d1.import x (typ_left eff_dcs) with
       | Inl x' -> begin
-        match f x' with 
-        | Inl x'' -> Inl (d2.export (right eff_dcs) x'') 
+        let r : resexn t2 = f x' in
+        assert (Inl? r \/ Inr? r);
+        match r with
+        | Inl x'' -> Inl (d2.export (typ_right eff_dcs) x'')
         | Inr err -> Inr err
       end
       | Inr err -> Inr err
@@ -397,11 +533,12 @@ instance exportable_arrow_pre_post_args
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst; 
     c_ityp = solve;
     export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) fl mst (pre x) (post x))) ->
+      typ_root eff_dcs;
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
       let eff_dc : eff_dc_typ fl mst #t1 #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+      let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
       assert (forall x s0 s1. check (root dcs) x s0 () s1 == dc x s0 () s1);
       let f' = enforce_pre_args pi pre dc eff_dc post f in
       let d = exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post in
@@ -423,11 +560,12 @@ instance exportable_arrow_pre_post
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst; 
     c_ityp = solve;
     export = (fun eff_dcs (f:(t1 -> MIO (resexn t2) fl mst pre post)) ->
+      typ_root eff_dcs;
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
       let eff_dc : eff_dc_typ fl mst #unit #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+      let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
       assert (forall x s0 s1. check (root dcs) x s0 () s1 == dc x s0 () s1);
       let f' = enforce_pre pi pre dc eff_dc post f in
       let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
@@ -436,30 +574,30 @@ instance exportable_arrow_pre_post
     )
 }
 
-    
+
 (** *** Safe importable instances **)
 let interm_is_safely_importable (#fl:erased tflag) (#pi:policy_spec) #mst (#dcs:(tree (pck_dc mst)){Leaf? dcs}) #t (d:interm t fl pi mst) : safe_importable t fl pi mst dcs = {
   ityp = t;
   c_ityp = solve;
-  safe_import = (fun x Leaf -> x); 
+  safe_import = (fun x _ -> x);
 }
 
 instance importable_unit (#fl:erased tflag) (#pi:policy_spec) #mst : importable unit fl pi mst Leaf = {
   ityp = unit;
   c_ityp = solve;
-  import = (fun () Leaf -> Inl ())
+  import = (fun () _ -> Inl ())
 }
 
 instance importable_file_descr (#fl:erased tflag) (#pi:policy_spec) #mst : importable file_descr fl pi mst Leaf = {
   ityp = file_descr;
   c_ityp = solve;
-  import = (fun fd Leaf -> Inl fd)
+  import = (fun fd _ -> Inl fd)
 }
 
 instance importable_bytes (#fl:erased tflag) (#pi:policy_spec) #mst : importable Bytes.bytes fl pi mst Leaf = {
   ityp = Bytes.bytes;
   c_ityp = solve;
-  import = (fun b Leaf -> Inl b)
+  import = (fun b _ -> Inl b)
 }
 
 (** *** Importable instances **)
@@ -508,7 +646,7 @@ instance importable_pair
   ityp = d1.ityp * d2.ityp;
   c_ityp = solve;
   import = (fun (x,y) eff_dcs ->
-      match (d1.import x (left eff_dcs), d2.import y (right eff_dcs)) with
+      match (d1.import x (typ_left eff_dcs), d2.import y (typ_right eff_dcs)) with
       | (Inl x, Inl y) -> Inl (x, y)
       | _ -> Inr Contract_failure)
 }
@@ -522,12 +660,12 @@ instance importable_either
   import = (fun x eff_dcs ->
       match x with
       | Inl x' -> begin
-        match d1.import x' (left eff_dcs) with
+        match d1.import x' (typ_left eff_dcs) with
         | Inl x'' -> Inl (Inl x'')
         | Inr err -> Inr err
       end
       | Inr y -> begin
-        match d2.import y (right eff_dcs) with
+        match d2.import y (typ_right eff_dcs) with
         | Inl y' -> Inl (Inr y')
         | Inr err -> Inr err
       end)
@@ -542,7 +680,7 @@ instance importable_dpair_refined
   ityp = d1.ityp & d2.ityp;
   c_ityp = solve;
   import = (fun ((x', y')) eff_dcs ->
-      match (d1.import x' (left eff_dcs), d2.import y' (right eff_dcs)) with
+      match (d1.import x' (typ_left eff_dcs), d2.import y' (typ_right eff_dcs)) with
        | (Inl x, Inl y) ->
             if check2 #t1 #t2 #p x y then Inl ((| x, y |) <: (x:t1 & y:t2{p x y})) else Inr Contract_failure
        | _ -> Inr Contract_failure)
@@ -569,10 +707,10 @@ instance safe_importable_arrow
   safe_importable ((x:t1) -> MIOpi (resexn t2) fl pi mst) fl pi mst dcs = {
   ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
   c_ityp = solve;
-  safe_import = (fun (f:d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst) eff_dcs (x:t1) -> 
-    (let x' = d1.export (left eff_dcs) x in 
+  safe_import = (fun (f:d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst) eff_dcs (x:t1) ->
+    (let x' = d1.export (typ_left eff_dcs) x in
      let y : resexn d2.ityp = f x' in
-     (safe_importable_resexn t2 #d2).safe_import y (right eff_dcs)) <: MIOpi (resexn t2) fl pi mst)
+     (safe_importable_resexn t2 #d2).safe_import y (typ_right eff_dcs)) <: MIOpi (resexn t2) fl pi mst)
 }
 #pop-options
 
@@ -677,8 +815,9 @@ instance safe_importable_arrow_pre_post_args_res
    ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
   c_ityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
+    typ_root eff_dcs;
     let dcs' = (EmptyNode (left dcs) (right dcs)) in
-    let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+    let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
     let f' = (safe_importable_arrow #fl #pi #mst #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
     let (| dc_pck, eff_dc |) = root eff_dcs in
     assert (forall x r s0 s1. check (root dcs) x s0 r s1 == dc_pck._3 x s0 r s1);
@@ -701,8 +840,9 @@ instance safe_importable_arrow_pre_post_res
    ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
   c_ityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
+    typ_root eff_dcs;
     let dcs' = (EmptyNode (left dcs) (right dcs)) in
-    let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+    let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
     let f' = (safe_importable_arrow #fl #pi #mst #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
     let (| dc_pck, eff_dc |) = root eff_dcs in
     assert (forall x r s0 s1. check (root dcs) x s0 r s1 == dc_pck._3 x s0 r s1);
@@ -725,8 +865,9 @@ instance safe_importable_arrow_pre_post_args
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
+      typ_root eff_dcs;
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+      let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
       let f' = (safe_importable_arrow #fl #pi #mst #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
       let (| dc_pck, eff_dc |) = root eff_dcs in
       assert (forall x r s0 s1. check (root dcs) x s0 r s1 == dc_pck._3 x s0 r s1);
@@ -752,8 +893,9 @@ instance safe_importable_arrow_pre_post
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
+      typ_root eff_dcs;
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
+      let eff_dcs' : typ_eff_dcs fl mst dcs' = typ_empty_node (typ_left eff_dcs) (typ_right eff_dcs) in
       let f' = (safe_importable_arrow #fl #pi #mst #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
       let (| dc_pck, eff_dc |) = root eff_dcs in
       assert (forall x r s0 s1. check (root dcs) x s0 r s1 == dc_pck._3 x s0 r s1);

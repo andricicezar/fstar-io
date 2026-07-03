@@ -245,18 +245,21 @@ let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
 
 open Compiler.Languages
 
-let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mstate) : Type =
+(* The universes of `raise_t` are fixed (newer F* versions generalize them,
+   and then the occurrences of `typ_to_fstar` in the signatures and in the
+   bodies below end up at different universe instantiations). *)
+let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mstate) : Type u#1 =
   match t with
   | TArr t1 t2 -> (typ_to_fstar t1 fl pi mst) -> MIOpi (typ_to_fstar t2 fl pi mst) fl pi mst
-  | TUnit -> FStar.Universe.raise_t unit
-  | TNat -> FStar.Universe.raise_t nat
+  | TUnit -> FStar.Universe.raise_t u#0 u#1 unit
+  | TNat -> FStar.Universe.raise_t u#0 u#1 nat
   | TSum t1 t2 -> either (typ_to_fstar t1 fl pi mst) (typ_to_fstar t2 fl pi mst)
   | TPair t1 t2 -> (typ_to_fstar t1 fl pi mst) * (typ_to_fstar t2 fl pi mst)
-  | TByte -> FStar.Universe.raise_t byte
-  | TBytes -> FStar.Universe.raise_t bytes
-  | TExn -> FStar.Universe.raise_t exn
-  | TFDesc -> FStar.Universe.raise_t file_descr
-  | TString -> FStar.Universe.raise_t string
+  | TByte -> FStar.Universe.raise_t u#0 u#1 byte
+  | TBytes -> FStar.Universe.raise_t u#0 u#1 bytes
+  | TExn -> FStar.Universe.raise_t u#0 u#1 exn
+  | TFDesc -> FStar.Universe.raise_t u#0 u#1 file_descr
+  | TString -> FStar.Universe.raise_t u#0 u#1 string
 
 
 type venv (g:env) (fl:erased tflag) (pi:policy_spec) (mst:mstate) = x:var{Some? (g x)} -> typ_to_fstar (Some?.v (g x)) fl pi mst
@@ -312,10 +315,13 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
   : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) =
   let _ = lemma_append_enforced_locally 'p in
   match e with
-  | EUnit -> FStar.Universe.raise_val ()
+  | EUnit ->
+       assert (t == TUnit);
+       FStar.Universe.raise_val u#0 u#1 ()
   | EZero ->
+       assert (t == TNat);
        let zero : nat = 0 in
-       FStar.Universe.raise_val zero
+       FStar.Universe.raise_val u#0 u#1 zero
   | ESucc e ->
        let TySucc h1 = h in
        assert (t == TNat);
@@ -328,7 +334,7 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v3 : typ_to_fstar (TArr t t) 'f 'p 'm = exp_to_fstar g e3 (TArr t t) h3 ve in
        let rec f (n : nat) : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm =
          if n = 0 then v2 else f (n - 1) in
-       f (FStar.Universe.downgrade_val v1)
+       f (FStar.Universe.downgrade_val u#0 u#1 v1)
   | EInl e ->
        let TyInl #_ #_ #t1 #t2 h1 = h in
        let v = exp_to_fstar g e t1 h1 ve in
@@ -359,13 +365,13 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v2 : typ_to_fstar t1 'f 'p 'm = exp_to_fstar g e2 t1 h2 ve in
        v1 v2
   | EByteLit b ->
-       FStar.Universe.raise_val b
+       FStar.Universe.raise_val u#0 u#1 b
   | EBytesCreate e1 e2 ->
        let TyBytesCreate h1 h2 = h in
        let v1 : typ_to_fstar TNat 'f 'p 'm = exp_to_fstar g e1 TNat h1 ve in
        let v2 : typ_to_fstar TByte 'f 'p 'm = exp_to_fstar g e2 TByte h2 ve in
-       let b : bytes = Bytes.create (convert (FStar.Universe.downgrade_val v1)) (FStar.Universe.downgrade_val v2) in
-       FStar.Universe.raise_val b
+       let b : bytes = Bytes.create (convert (FStar.Universe.downgrade_val u#0 u#1 v1)) (FStar.Universe.downgrade_val u#0 u#1 v2) in
+       FStar.Universe.raise_val u#0 u#1 b
   | EFst e ->
        let TyFst #_ #_ #t1 #t2 h1 = h in
        let v = exp_to_fstar g e (TPair t1 t2) h1 ve in
@@ -380,7 +386,7 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v2 = exp_to_fstar g e2 t2 h2 ve in
        (v1, v2)
   | EStringLit s ->
-       FStar.Universe.raise_val s
+       FStar.Universe.raise_val u#0 u#1 s
 
 let exp_to_fstar' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
   : (typ_to_fstar t 'f 'p 'm) =

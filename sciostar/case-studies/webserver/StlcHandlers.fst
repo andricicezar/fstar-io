@@ -29,27 +29,52 @@ let handler_env =
   (extend (TArr TBytes (TSum TUnit TExn)) (*send *) 
   (extend TBytes empty))))) (* req *)
 
+(* The bodies of the wrappers around `sec_io` and `send` are top-level
+   functions (instead of local definitions inside `bt_handler`): this keeps
+   the verification conditions small. *)
+let bt_write (#fl:erased tflag) (sec_io:io_lib fl sgm mymst Ctx)
+  (fdb:FStar.Universe.raise_t file_descr * FStar.Universe.raise_t bytes)
+  : MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm mymst =
+  assert_norm (_io_ops Write);
+  let fd = FStar.Universe.downgrade_val (fst fdb) in
+  let b = FStar.Universe.downgrade_val (snd fdb) in
+  let r : io_resm Write (fd, b) = sec_io Write (fd, b) in
+  assert (Inl? r \/ Inr? r);
+  match r with
+  | Inl unit -> Inl (FStar.Universe.raise_val unit)
+  | Inr ex -> Inr (FStar.Universe.raise_val ex)
+
+let bt_socket (#fl:erased tflag) (sec_io:io_lib fl sgm mymst Ctx)
+  (_u:FStar.Universe.raise_t unit)
+  : MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm mymst =
+  assert_norm (_io_ops Socket);
+  match sec_io Socket () with
+  | Inl fd -> Inl (FStar.Universe.raise_val fd)
+  | Inr ex -> Inr (FStar.Universe.raise_val ex)
+
+let bt_openfile (#fl:erased tflag) (sec_io:io_lib fl sgm mymst Ctx)
+  (s:FStar.Universe.raise_t string)
+  : MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm mymst =
+  assert_norm (_io_ops Openfile);
+  let s = FStar.Universe.downgrade_val s in
+  match sec_io Openfile (s, [O_RDWR], 0x650) with
+  | Inl fd -> Inl (FStar.Universe.raise_val fd)
+  | Inr ex -> Inr (FStar.Universe.raise_val ex)
+
+let bt_send (#fl:erased tflag) (send:Bytes.bytes -> MIOpi (either unit exn) fl sgm mymst)
+  (b:FStar.Universe.raise_t bytes)
+  : MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm mymst =
+  match send (FStar.Universe.downgrade_val b) with
+  | Inl unit -> Inl (FStar.Universe.raise_val unit)
+  | Inr ex -> Inr (FStar.Universe.raise_val ex)
+
 let bt_handler (e:exp) (h:typing handler_env e (TSum TUnit TExn)) : tgt_handler =
  fun #fl sec_io (client : int) (req : Bytes.bytes) (send : Bytes.bytes -> MIOpi (either unit exn) fl sgm _) ->
    let client : FStar.Universe.raise_t file_descr = FStar.Universe.raise_val client in
-   let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm _ = fun fdb ->
-     let fd = FStar.Universe.downgrade_val (fst fdb) in
-     let b = FStar.Universe.downgrade_val (snd fdb) in
-     match sec_io Write (fd, b) with
-     | Inl unit -> Inl (FStar.Universe.raise_val unit)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let socket : FStar.Universe.raise_t unit -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm _ = fun _u ->
-     match sec_io Socket () with
-     | Inl fd -> Inl (FStar.Universe.raise_val fd)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let openfile : FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm _ = fun s ->
-     let s = FStar.Universe.downgrade_val s in
-     match sec_io Openfile (s, [O_RDWR], 0x650) with
-     | Inl fd -> Inl (FStar.Universe.raise_val fd)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let send : FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm _ = fun b -> match send (FStar.Universe.downgrade_val b) with
-     | Inl unit -> Inl (FStar.Universe.raise_val unit)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
+   let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm _ = bt_write sec_io in
+   let socket : FStar.Universe.raise_t unit -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm _ = bt_socket sec_io in
+   let openfile : FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl sgm _ = bt_openfile sec_io in
+   let send : FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm _ = bt_send send in
    let req : FStar.Universe.raise_t bytes = FStar.Universe.raise_val req in
    let handler_venv = 
      vextend #fl #mymst #sgm #_ openfile (

@@ -114,6 +114,24 @@ let rrhc_bt_rrhc
   end;
   assert (rrhc comp) by (norm [delta_only [`%rrhc]]; assumption ())
 
+(* Introduction lemma for `rrhc`: it is enough to exhibit a backtranslation
+   and a proof that it validates the RrHC statement pointwise. Defined here,
+   next to `rrhc` and `rrhc_bt`, so that all the involved formulas are
+   elaborated in a single place (newer F* versions do not always relate the
+   formulas arising from different elaboration sites). *)
+let rrhc_intro
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  (pf:(i:comp.source.interface -> ct:comp.target.ctx (comp.comp_int i) -> ps:comp.source.pprog i ->
+       Lemma (comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_traces`
+              comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))))
+  : Lemma (rrhc comp) =
+  introduce forall (i:comp.source.interface) (ps:comp.source.pprog i) (ct:comp.target.ctx (comp.comp_int i)).
+      comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_traces`
+      comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+  with (pf i ct ps);
+  assert (rrhc_bt comp bt) by (norm [delta_only [`%rrhc_bt]]; assumption ());
+  rrhc_bt_rrhc comp bt
 
 let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):trace_property #comp.target.event_typ -> trace_property #comp.source.event_typ -> Type0): Type0 =
   forall (i:comp.source.interface).
