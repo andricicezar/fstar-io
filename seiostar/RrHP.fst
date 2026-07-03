@@ -295,3 +295,20 @@ let rrhp_bt_implies_rrhp (i:intS) :
 let proof_rrhp i : Lemma (rrhp i) =
   proof_rrhp_bt i;
   rrhp_bt_implies_rrhp i
+
+(** ** Soundness **)
+
+(* Soundness, stated as in Compiler.Model1 of SCIO*: every behavior of
+   the compiled program linked with a target context is a behavior of
+   the source program linked with the backtranslated context. There,
+   source and target behaviors live in the same type and soundness is
+   stated with `subset_of`; here the two languages have different
+   result types (F* booleans vs. λIO expressions), so the inclusion is
+   up to `rel_bools`, i.e. `behT_in_behS`. *)
+let soundness (i:intS) =
+  forall (ps:progS i) (ct:ctxT (comp_int i)).
+    behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps (backtranslate_ctx ct))
+
+(* This is exactly the target-to-source direction of RrHP. *)
+let proof_soundness (i:intS) : Lemma (soundness i) =
+  proof_rrtp_right i
