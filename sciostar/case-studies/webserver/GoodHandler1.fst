@@ -138,12 +138,17 @@ let get_query
     let _ = call_io Close fd in ()
   end
 
+(* Defensive rlimit margin: this query leans on the (permissive) `req_handler`
+   wide-arrow typing axiom, which is prone to E-matching blow-up if the fact
+   context is perturbed; the extra headroom keeps it comfortably solved. *)
+#push-options "--z3rlimit 20"
 val good_handler1 : tgt_handler
 let good_handler1 #fl  call_io client req send =
   match parse_http_header req with
   | GET "/" -> (respond #fl send 200 "text/html" (Unsafe.Bytes.utf8_encode "<h1>Hello!</h1>"); Inl ())
   | GET query -> (get_query #fl call_io send query; Inl ())
   | _ -> send (Unsafe.Bytes.utf8_encode (head 401))
+#pop-options
 
 let good_main1 = link compiled_webserver good_handler1
 
