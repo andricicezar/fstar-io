@@ -164,19 +164,19 @@ let ml_call (op:io_ops) : Obj.t -> Obj.t =
   | Access -> Obj.magic (Obj.repr Unix_Star.access)
   | Stat -> Obj.magic (Obj.repr Unix_Star.stat)
 
-let (io_call : caller -> io_ops -> Obj.t -> (unit, Obj.t resexn) mio) =
+let (io_call : caller -> io_ops -> Obj.t -> (Obj.t, Obj.t resexn) mio) =
   fun caller -> fun op -> fun argz ->
     match ml_call op argz with
     | exception err ->
       (* error case: *)
       Monitor.update_state caller op argz (Obj.magic (Inr err)) ();
       print_call caller op argz (Obj.magic (Inr err));
-      mio_return () (Inr err)
+      mio_return () (Obj.magic (Inr err))
     | rez ->
       (* success: *)
       Monitor.update_state caller op argz (Obj.magic (Inl rez)) ();
       print_call caller op argz (Obj.magic (Inl rez));
-      mio_return () (Inl rez)
+      mio_return () (Obj.magic (Inl rez))
 
 (* old version: if for whatever reason print_call raises an exception
    in the successful case we will get two events logged.
@@ -193,7 +193,7 @@ let (io_call : caller -> io_ops -> Obj.t -> (unit, Obj.t resexn) mio) =
 *)
 
 let (mio_call :
-  unit -> caller -> mio_ops -> Obj.t -> (unit, Obj.t) mio)
+  unit -> caller -> mio_ops -> Obj.t -> (Obj.t, Obj.t) mio)
   =
   fun () -> fun caller -> fun op -> fun argz ->
   match op with

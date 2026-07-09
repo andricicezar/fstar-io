@@ -12,6 +12,7 @@ ROOTS += case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.
 CACHEDIR := .cache
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
+FLAGS += --include ../lib
 FLAGS += --include case-studies
 
 all: verify

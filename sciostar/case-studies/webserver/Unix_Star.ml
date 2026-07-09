@@ -27,8 +27,15 @@ let socket () : file_descr =
 let setsockopt (socket, opt, value) : unit =
   Unix.setsockopt socket opt value
 
+(* The port is a UInt8 on the F* side, so it is always in the privileged
+   range (< 1024). When not running as root (the artifact's Docker container
+   runs as root, matching the README), remap it to +8000 (81 -> 8081) so the
+   server can still be exercised. *)
+let remap_port port =
+  if port < 1024 && Unix.getuid () <> 0 then port + 8000 else port
+
 let bind (socket, address, port) : unit =
-  Unix.bind socket (Unix.ADDR_INET(Unix.inet_addr_of_string address, port))
+  Unix.bind socket (Unix.ADDR_INET(Unix.inet_addr_of_string address, remap_port port))
 
 let setnonblock fd : unit = 
   Unix.set_nonblock fd

@@ -1,51 +1,20 @@
 module MIO
 
 open FStar.Tactics
-open ExtraTactics
 open FStar.Ghost
 
 include MIO.Sig
-//open MIO.Sig.Call
 open DMFree
+open GuardedDMFree
 
-(** The postcondition for an io computation is defined over the
-result (type: a) and local trace (type: trace).
-The local trace represents the events that happened during the
-computation. Local trace is in chronological order.
+(** * The MIO effect indexed by actions.
 
-We also have the history (type: trace) which represents the
-events that happend until the beggining of the io computation.
-The history is in reverse chronology order.
-
-At the end of an io computation, the local trace is appended
-in reverse order to the history. **)
-let dm_mio_theta #mst #a = theta #a #mio_ops #(mio_sig mst) #event mio_wps
-  
-type dm_mio mst = dm mio_ops (mio_sig mst) event mio_wps
-let dm_mio_return (a:Type) (mst:mstate) (x:a) : dm_mio mst a (hist_return x) =
-  dm_return mio_ops (mio_sig mst) event mio_wps a x
-
-val dm_mio_bind  : 
-  a: Type ->
-  b: Type ->
-  mst : mstate ->
-  wp_v: hist a ->
-  wp_f: (_: a -> hist b) ->
-  v: dm_mio mst a wp_v ->
-  f: (x: a -> dm_mio mst b (wp_f x)) ->
-  Tot (dm_mio mst b (hist_bind wp_v wp_f))
-let dm_mio_bind a b mst wp_v wp_f v f = dm_bind mio_ops (mio_sig mst) event mio_wps a b wp_v wp_f v f
-
-val dm_mio_subcomp : 
-  a: Type ->
-  mst:mstate ->
-  wp1: hist a ->
-  wp2: hist a ->
-  f: dm_mio mst a wp1 ->
-  Pure (dm_mio mst a wp2) (wp1 ⊑ wp2) (fun _ -> True)
-let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_ops (mio_sig mst) event mio_wps a wp1 wp2 f
-
-(** * The MIO effect indexed by actions **)
+    The underlying representation of `mio_dm` (defined in MIO.Sig on top of
+    lib's DMFree/GuardedDMFree) is the free monad over
+    `cmd_sum guard_cmd (mio_cmds mst)`: guard commands (GCmd) play the role
+    that the old `PartialCall` constructor played. Therefore the flag
+    predicate `satisfies` is defined on this guarded carrier and always
+    allows guard commands, no matter the flag. **)
 
 (** ** Types **)
 
@@ -53,20 +22,26 @@ let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_ops (mio_sig mst) event mio_
 noeq
 type tflag = | NoOps | GetMStateOps | IOOps | AllOps
 
-let rec satisfies #mst (m:mio mst 'a) (flag:tflag) =
-match flag, m with
-| AllOps,   _                     -> True
-| _,            Return x              -> True
-| _,            PartialCall pre k     -> forall r. satisfies (k r) flag
-| NoOps,    _                     -> False
-| GetMStateOps, Call _ GetTrace arg k   -> forall r. satisfies (k r) flag
-| GetMStateOps, Call _ GetST arg k   -> forall r. satisfies (k r) flag
-| GetMStateOps, Call _ op arg k        -> False
-| IOOps,    Call _ GetTrace arg k   -> False
-| IOOps,    Call _ GetST    arg k   -> False
-| IOOps,    Call _ op arg k        -> forall r. satisfies (k r) flag
+(** Which commands does a flag allow? Guards (CmdL) are always allowed,
+    no matter the flag: they play the role of PartialCall.
+    (Note: destructing the command inside a `Call` pattern of `satisfies`
+    trips universe inference, so the dispatch lives in this helper where
+    `r` is a regular binder.) **)
+let allows #mst (flag:tflag) (#r:Type0) (op:cmd_sum guard_cmd (mio_cmds mst) r) : Type0 =
+  match op with
+  | CmdL _ -> True
+  | CmdR (OpCall _ op' _) ->
+    if op' = GetTrace || op' = GetST
+    then (match flag with | AllOps | GetMStateOps -> True | _ -> False)
+    else (match flag with | AllOps | IOOps -> True | _ -> False)
 
-let (⊕) (flag1:tflag) (flag2:tflag) : tflag = 
+let rec satisfies #mst #a (m:mio mst a) (flag:tflag) : Tot Type0 (decreases m) =
+  match flag, m with
+  | AllOps, _      -> True
+  | _, Return _    -> True
+  | _, Call op k   -> allows flag op /\ (forall r. satisfies (k r) flag)
+
+let (⊕) (flag1:tflag) (flag2:tflag) : tflag =
   match flag1, flag2 with
   | NoOps, NoOps -> NoOps
   | NoOps, fl -> fl
@@ -97,38 +72,30 @@ let plus_comm      (f1 f2 : tflag) : Lemma (f1⊕f2 == f2⊕f1) = ()
    effect WPs and make those queries diverge. *)
 let le_refl      (f:tflag) : Lemma (f ≼ f)          [SMTPat (f ≼ f)]     = ()
 
+let allows_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (#r:Type0) (op:cmd_sum guard_cmd (mio_cmds mst) r) :
+  Lemma (allows f1 op ==> allows f2 op) = ()
+
 let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : mio mst 'a) :
-  Lemma (satisfies m f1 ==> satisfies m f2) =
+  Lemma (ensures satisfies m f1 ==> satisfies m f2) (decreases m) =
   match m with
   | Return _ -> ()
-  | PartialCall i o ->
+  | Call op k ->
+    allows_le f1 f2 op;
     Classical.forall_intro
-     ((fun r -> sat_le f1 f2 (o r)) <: r:_ -> Lemma (satisfies (o r) f1 ==> satisfies (o r) f2))
-  | Call _ f i o ->
-    Classical.forall_intro
-     ((fun r -> sat_le f1 f2 (o r)) <: r:_ -> Lemma (satisfies (o r) f1 ==> satisfies (o r) f2))
+     ((fun r -> sat_le f1 f2 (k r)) <: r:_ -> Lemma (satisfies (k r) f1 ==> satisfies (k r) f2))
 
 let rec sat_bind #mst (fl:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
-  : Lemma (v `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind _ _ _ _ v f `satisfies` fl)
+  : Lemma (ensures v `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind v f `satisfies` fl)
+          (decreases v)
   =
   match v with
   | Return _ -> ()
-  | PartialCall i o ->
-  Classical.forall_intro
-   ((fun r -> sat_bind fl (o r) f) <: r:_ -> Lemma ((o r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind _ _ _ _ (o r) f `satisfies` fl))
+  | Call op k ->
+    Classical.forall_intro
+     ((fun r -> sat_bind fl (k r) f) <: r:_ -> Lemma ((k r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind (k r) f `satisfies` fl))
 
-  | Call _ _ i o ->
-  Classical.forall_intro
-   ((fun r -> sat_bind fl (o r) f) <: r:_ -> Lemma ((o r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind _ _ _ _ (o r) f `satisfies` fl))
-
-let dm_mio_bind_is_free_bind a b mst wp_v wp_f v f
-: Lemma (dm_mio_bind a b mst wp_v wp_f v f == free_bind _ _ _ _ v f)
-=
-  let r = dm_mio_bind a b mst wp_v wp_f v f in
-  assert (r == free_bind _ _ _ _ v f)
-
-let sat_bind_add mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
-  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind _ _ _ _ v f `satisfies` (fl_v ⊕ fl_f))
+let sat_bind_add #mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
+  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind v f `satisfies` (fl_v ⊕ fl_f))
   =
   sat_le fl_v (fl_v ⊕ fl_f) v;
   let aux x : Lemma (f x `satisfies` fl_f ==> f x `satisfies` (fl_v ⊕ fl_f)) =
@@ -137,50 +104,62 @@ let sat_bind_add mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
   Classical.forall_intro aux;
   sat_bind (fl_v ⊕ fl_f) v f
 
+let mio_dm_bind_is_free_bind (mst:mstate) #a #b
+  (wp_v : hist #event a)
+  (wp_f : a -> hist #event b)
+  (v : mio_dm mst a wp_v)
+  (f : (x:a -> mio_dm mst b (wp_f x)))
+: Lemma (mio_dm_bind mst wp_v wp_f v f == free_bind v f)
+=
+  let r = mio_dm_bind mst wp_v wp_f v f in
+  assert (r == free_bind v f)
+
 (** ** Defining F* Effect **)
 
-type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist a) = t:(dm_mio mst a wp){t `satisfies` flag} 
+type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist #event a) =
+  t:(mio_dm mst a wp){t `satisfies` flag}
 
-let dm_gmio_theta #a #mst = theta #a #mio_ops #(mio_sig mst) #event mio_wps
+let dm_gmio_theta #a #mst (m:mio mst a) : hist #event a =
+  theta (cmd_wp_sum guard_cmd_wp mio_cwp) m
 
-let dm_gmio_return (a:Type) (x:a) mst : dm_gmio a mst NoOps (hist_return x) by (compute ()) =
-  dm_mio_return a mst x
+let dm_gmio_return (a:Type) (x:a) (mst:mstate) : dm_gmio a mst NoOps (hist_return x) by (compute ()) =
+  mio_dm_return mst x
 
-val dm_gmio_bind  : 
+val dm_gmio_bind  :
   a: Type ->
   b: Type ->
   mst: mstate ->
   flag_v : erased tflag ->
-  wp_v: Hist.hist a ->
+  wp_v: hist #event a ->
   flag_f : erased tflag ->
-  wp_f: (a -> Hist.hist b) ->
+  wp_f: (a -> hist #event b) ->
   v: dm_gmio a mst flag_v wp_v ->
   f: (x: a -> dm_gmio b mst flag_f (wp_f x)) ->
   Tot (dm_gmio b mst (flag_v ⊕ flag_f) (hist_bind wp_v wp_f))
 
 let dm_gmio_bind a b mst flag_v wp_v flag_f wp_f v f : (dm_gmio b mst (flag_v ⊕ flag_f) (hist_bind wp_v wp_f)) =
-  let r = dm_mio_bind a b mst wp_v wp_f v f in
-  sat_bind_add mst flag_v flag_f v f;
-  dm_mio_bind_is_free_bind a b mst wp_v wp_f v f;
-  assert (free_bind _ _ _ _ v f `satisfies` (flag_v ⊕ flag_f));
+  let r = mio_dm_bind mst wp_v wp_f v f in
+  sat_bind_add flag_v flag_f v f;
+  mio_dm_bind_is_free_bind mst wp_v wp_f v f;
+  assert (free_bind v f `satisfies` (flag_v ⊕ flag_f));
   r
 
-val dm_gmio_subcomp : 
+val dm_gmio_subcomp :
   a: Type ->
   mst:mstate ->
   flag1 : erased tflag ->
-  wp1: hist a ->
+  wp1: hist #event a ->
   flag2 : erased tflag ->
-  wp2: hist a ->
+  wp2: hist #event a ->
   f: dm_gmio a mst flag1 wp1 ->
   Pure (dm_gmio a mst flag2 wp2) ((flag1 ≼ flag2) /\ wp1 ⊑ wp2) (fun _ -> True)
 let dm_gmio_subcomp a mst flag1 wp1 flag2 wp2 f =
   sat_le flag1 flag2 f;
-  dm_mio_subcomp a mst wp1 wp2 f
+  mio_dm_subcomp mst wp1 wp2 f
 
 let dm_gmio_if_then_else (a : Type u#a) (mst:mstate)
-  (fl1 : erased tflag) (wp1 : hist a)
-  (fl2 : erased tflag) (wp2 : hist a)
+  (fl1 : erased tflag) (wp1 : hist #event a)
+  (fl2 : erased tflag) (wp2 : hist #event a)
   (f : dm_gmio a mst fl1 wp1) (g : dm_gmio a mst fl2 wp2) (b : bool) : Type =
   dm_gmio a mst (fl1 ⊕ fl2) (hist_if_then_else wp1 wp2 b)
 
@@ -203,24 +182,34 @@ effect {
      }
 }
 
-let dm_gmio_partial_return 
-  mst (pre:pure_pre) : dm_gmio (squash pre) mst NoOps (partial_call_wp pre) by (compute ()) =
-  dm_partial_return mio_ops (mio_sig mst) event mio_wps pre
+(** Guards (the analogue of the old PartialCall) satisfy any flag,
+    in particular NoOps. **)
+let dm_gmio_guard_return
+  (mst:mstate) (pre:pure_pre) : dm_gmio (squash pre) mst NoOps (guard_wp pre) by (compute ()) =
+  mio_dm_guard_return mst pre
 
+(** Note: like in GuardedDMFree.lift_pure_gdm, the subcomp query here is
+    sensitive to quantifier instantiation; it only goes through when split
+    off from the rest of the VC, with ifuel 2. **)
+#push-options "--z3rlimit 80 --ifuel 2 --split_queries always"
 val lift_pure_dm_gmio :
   a: Type u#a ->
-  [@@@effect_param](mst: mstate)-> // syntax ok?
+  [@@@effect_param](mst: mstate)->
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (dm_gmio a mst NoOps (wp_lift_pure_hist w))
 let lift_pure_dm_gmio a mst w f =
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
-  let lhs : dm_gmio _ mst NoOps _ = dm_gmio_partial_return mst (as_requires w) in
-  let rhs = (fun (pre:(squash (as_requires w))) -> dm_gmio_return a (f pre) mst) in
-  let m = dm_gmio_bind _ _ mst NoOps _ NoOps _ lhs rhs in
+  let lhs : dm_gmio _ mst NoOps (guard_wp #event (as_requires w)) =
+    dm_gmio_guard_return mst (as_requires w) in
+  let rhs (_:squash (as_requires w)) : dm_gmio a mst NoOps (wp_lift_pure_hist w) =
+    let r = f () in
+    dm_gmio_return a r mst in
+  let m = dm_gmio_bind _ a mst NoOps (guard_wp #event (as_requires w)) NoOps (fun _ -> wp_lift_pure_hist w) lhs rhs in
   dm_gmio_subcomp a mst NoOps _ NoOps _ m
-  
+#pop-options
+
 sub_effect PURE ~> MIOwp = lift_pure_dm_gmio
 
 effect MIO
@@ -229,9 +218,14 @@ effect MIO
   (mst:mstate)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
-  MIOwp a mst fl (to_hist pre post) 
+  MIOwp a mst fl (to_hist pre post)
 
-#push-options "--z3rlimit 20"
+(** ** Actions **)
+
+(* The reflect query is one big case split over the ops of the signature;
+   with the larger signatures (e.g. the webserver's) it only goes through
+   when split. *)
+#push-options "--z3rlimit 40 --split_queries always"
 let static_op
   (#mst:mstate)
   caller
@@ -245,25 +239,12 @@ let static_op
   MIOwp?.reflect (MIO.Sig.Call.mio_call caller op arg)
 #pop-options
 
+#push-options "--z3rlimit 40 --split_queries always"
 let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetMStateOps
   (fun p h -> p [] (Ghost.hide h)) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetTrace ())
-  
+
 let get_state #mst () : MIOwp mst.typ mst GetMStateOps
   (fun p h -> forall s. s `mst.abstracts` h ==> p [] s) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetST ())
-
-(**
-#push-options "--compat_pre_core 1"
-let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOOps) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
-  by (compute ())
-=
-  let fd = static_op #mst Prog Openfile "../Makefile" in
-  let fd = static_op Prog Openfile "../Makefile" in
-  let fd = static_op Prog Openfile "../Makefile" in
-  let fd = static_op Prog Openfile "../Makefile" in
-  let fd = static_op Prog Openfile "../Makefile" in
-  let fd = static_op Prog Openfile "../Makefile" in
-  if Inl? fd then let _ = static_op Prog Close (Inl?.v fd) in () else 
-  ()
 #pop-options

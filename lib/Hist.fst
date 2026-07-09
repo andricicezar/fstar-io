@@ -29,7 +29,7 @@ let hist_wp_monotonic (#event_type:Type) (wp:hist0 #event_type 'a) =
 
 type hist #event_type a = wp:(hist0 #event_type a){hist_wp_monotonic wp}
 
-val hist_subcomp0 : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist #event_type (x:a{p1 x}) -> 
+val hist_subcomp0 : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist #event_type (x:a{p1 x}) ->
   (hist #event_type (x:a{p2 x}))
 let hist_subcomp0 #_ #a #p1 #p2 #_ wp : (hist (x:a{p2 x})) =
   let wp' : hist0 (x:a{p2 x}) = wp in
@@ -37,7 +37,7 @@ let hist_subcomp0 #_ #a #p1 #p2 #_ wp : (hist (x:a{p2 x})) =
   assert (hist_wp_monotonic #(x:a{p2 x}) wp');
   wp'
 
-val hist_subcomp : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:hist #event_type (x:a{p1 x}) -> 
+val hist_subcomp : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:hist #event_type (x:a{p1 x}) ->
   Pure (hist #event_type (x:a{p2 x})) (requires (forall x. p1 x ==> p2 x)) (ensures (fun _ -> True))
 let hist_subcomp #event_type #a #p1 #p2 wp = hist_subcomp0 #event_type #a #p1 #p2 #() wp
 
@@ -66,8 +66,9 @@ let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -
   fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
 
 unfold
-let wp_lift_pure_hist (#event_type:Type u#e) (#a:Type u#a) (w : pure_wp a) : hist #event_type a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w;
+let wp_lift_pure_hist (#a:Type u#a) (#event_type:Type u#b) (w : pure_wp a) : hist #event_type a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#(max a b) ();
   fun p _ -> w (p [])
 
 let lemma_wp_lift_pure_hist_implies_as_requires #a #event_type w :
@@ -107,7 +108,7 @@ let lemma_hist_bind_associativity #a #b #c #ev (w1:hist #ev a) (w2:a -> hist #ev
     end
   in
   Classical.forall_intro_2 pw
-  
+
 
 unfold
 let to_hist #a #event pre post : hist #event a =
