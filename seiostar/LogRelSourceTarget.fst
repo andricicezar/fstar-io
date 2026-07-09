@@ -15,7 +15,8 @@ let rec (∈) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   let (h, fs_v, e) = p in
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
-  | QBool #ref -> (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QBool #ref -> (let fs_v : bool = fs_v in
+     (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse))
   | QFileDescriptor -> e == EFileDescr fs_v
   | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #t1 #t2 qt1 qt2 -> begin
@@ -49,6 +50,7 @@ let rec (∈) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   end
   //| QRefinement #t qt ref -> False // TODO
 
+  | QNat -> e == nat_to_exp fs_v
                            (** vvvvvvvvvv defined over values **)
 and (⊆) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
@@ -84,10 +86,12 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
     lem_values_are_values (pack qt2) h (snd #t1 #t2 fs_e) e2
-  | QSum #t1 #t2 qt1 qt2 ->
+  | QSum #t1 #t2 qt1 qt2 -> begin
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+    end
+  | QNat -> lem_nat_to_exp_is_value fs_e
 
 let steps_val_id (e:value) (e':closed_exp) (h:history)
   : Lemma (requires squash (steps e e' h []))
@@ -192,8 +196,8 @@ let subset_ocomp (#g:typ_env) (t:qType) (#pre:spec_env g) (fs_e:fs_ocomp g t pre
 let (⊑) (#g:typ_env) (#t:qType) (#pre:spec_env g) (fs_v:fs_ocomp g t pre) (e:exp) : Type0 =
   subset_ocomp #g t fs_v e
 
-let lem_value_subset_valid_member_of t (fs_e:fs_oval empty t (fun _ -> True)) (e:value) :
-  Lemma (requires fs_e ⊏ e)
+let lem_value_subset_valid_member_of t #pre (fs_e:fs_oval empty t pre) (e:value) :
+  Lemma (requires pre empty_eval /\ fs_e ⊏ e)
         (ensures  valid_member_of #t (fs_e empty_eval) e) =
   introduce forall h. t ∈ (h, fs_e empty_eval, e) with begin
     eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
@@ -245,6 +249,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     | Inr fs_v', EInr e' -> val_type_closed_under_history_extension (pack qt2) h fs_v' e'
     | _ -> false_elim ()
     end
+  | QNat -> ()
   end
 
 let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) :
@@ -274,7 +279,7 @@ let lem_unfold_in_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> 
   assert (((t1 ^-> t2) ∈ (h, fs_e1, ELam e11)) <==> arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%arrow_in_body;
                                            `%get_rel;
-                                           `%(^->);
+                                           `%(^->); `%qArrR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -303,7 +308,7 @@ let lem_unfold_in_io_arrow_to_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_va
   assert (((t1 ^->!@ t2) ∈ (h, fs_e1, ELam e11)) <==> io_arrow_in_body_direct t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%io_arrow_in_body_direct;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -334,7 +339,7 @@ let lem_unfold_in_io_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^
   assert (((t1 ^->!@ t2) ∈ (h, fs_e1, ELam e11)) <==> io_arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8712; `%io_arrow_in_body; `%io_arrow_wrap;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];

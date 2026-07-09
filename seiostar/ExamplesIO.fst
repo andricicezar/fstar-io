@@ -6,9 +6,9 @@ let u_return () : io bool = return true
 
 let apply_io_return : bool -> io bool = fun x -> io_return x
 
-let apply_read () : io (resexn string) = io_call ORead 0
-let apply_write_const () : io (resexn unit) = io_call OWrite (2,"hello")
-let apply_write : string -> io (resexn unit) = fun x -> io_call OWrite (1,x)
+let apply_read (fd:file_descr) : io (resexn string) = io_call ORead fd
+let apply_write_const (fd:file_descr) : io (resexn unit) = io_call OWrite (fd,"hello")
+let apply_write : file_descr -> string -> io (resexn unit) = fun fd x -> io_call OWrite (fd,x)
 
 let apply_io_bind_const () : io bool =
   let!@ x = io_return true in
@@ -24,35 +24,35 @@ let apply_io_bind_pure_if : bool -> io bool =
     if!@ (io_return x) then io_return false
     else io_return true
 
-let apply_io_bind_write : string -> io (resexn unit) =
-  fun x ->
+let apply_io_bind_write : file_descr -> string -> io (resexn unit) =
+  fun fd x ->
     let!@ y : string = io_return x in
-    io_call OWrite (2, y) <: io (resexn unit)
+    io_call OWrite (fd, y) <: io (resexn unit)
 
-let apply_io_bind_read_write () : io (resexn unit) =
-  match!@ io_call ORead 4 with
-  | Inl _ -> io_call OWrite (1,"data")
+let apply_io_bind_read_write (fd1 fd2:file_descr) : io (resexn unit) =
+  match!@ io_call ORead fd1 with
+  | Inl _ -> io_call OWrite (fd2,"data")
   | Inr x -> io_return (Inr x)
 
-let apply_io_bind_read_write' () : io (resexn unit) =
-  io_bind (io_call ORead 9) (fun x -> match x with | Inl _ -> io_call OWrite (2,"data") | Inr x -> io_return (Inr x))
+let apply_io_bind_read_write' (fd1 fd2:file_descr) : io (resexn unit) =
+  io_bind (io_call ORead fd1) (fun x -> match x with | Inl _ -> io_call OWrite (fd2,"data") | Inr x -> io_return (Inr x))
 
-let apply_io_bind_read_if_write () : io (resexn unit) =
-  match!@ io_call ORead 0 with
-  | Inl _ -> io_call OWrite (7,"data")
+let apply_io_bind_read_if_write (fd1 fd2:file_descr) : io (resexn unit) =
+  match!@ io_call ORead fd1 with
+  | Inl _ -> io_call OWrite (fd2,"data")
   | Inr x -> return (Inr x)
 
 (** Examples inspired from the Web Server **)
 val utf8_encode : bool -> bool
 let utf8_encode x = x
 
-let sendError400 (fd:bool) : io unit =
-  io_call OWrite (9, "error400") ;!@
+let sendError400 (fd:file_descr) : io unit =
+  io_call OWrite (fd, "error400") ;!@
   return ()
 
-let get_req (fd:bool) : io (either bool bool) =
-  let x = utf8_encode fd in
-  match!@ io_call ORead 11 with
+let get_req (fd:file_descr) (msg:bool) : io (either bool bool) =
+  let x = utf8_encode msg in
+  match!@ io_call ORead fd with
   | Inl _ -> return (Inl true)
   | Inr _ -> return (Inr false)
 
@@ -62,10 +62,18 @@ let open2_read_write () =
   let!@! data = io_call ORead fd1 in
   io_call OWrite (fd2, data)
 
-val eq_string : string -> string -> bool
-let eq_string s t =
-  s = t
+let echo (fd1 fd2:file_descr) =
+  let!@! data = io_call ORead fd1 in
+  io_call OWrite (fd2, data)
 
-let echo () =
-  let!@! data = io_call ORead 0 in
-  io_call OWrite (1, data)
+let test_letbb_inl_body () : io (resexn file_descr) =
+  let!@! fd = io_call OOpen "/tmp/input" in
+  io_return (Inl fd)
+
+let test_letbb_closure (fd2:file_descr) : io (resexn unit) =
+  let!@! data = io_call ORead fd2 in
+  io_call OWrite (fd2, data)
+
+let test_letbb_nested_inl () : io (resexn (either file_descr file_descr)) =
+  let!@! fd = io_call OOpen "/tmp/x" in
+  io_return (Inl (Inl fd))

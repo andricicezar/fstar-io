@@ -17,7 +17,8 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   let (h, fs_v, e) = p in
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
-  | QBool #ref -> (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QBool #ref -> (let fs_v : bool = fs_v in
+     (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse))
   | QFileDescriptor ->  e == EFileDescr fs_v
   | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #t1 #t2 qt1 qt2 -> begin
@@ -51,6 +52,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   end
   //| QRefinement #t qt ref -> False // TODO
 
+  | QNat -> e == nat_to_exp fs_v
                            (** vvvvvvvvvv defined over values **)
 and (⊇) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
@@ -97,10 +99,12 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
     lem_values_are_values (pack qt2) h (snd #t1 #t2 fs_e) e2
-  | QSum #t1 #t2 qt1 qt2 ->
+  | QSum #t1 #t2 qt1 qt2 -> begin
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+    end
+  | QNat -> lem_nat_to_exp_is_value fs_e
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
@@ -250,6 +254,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     | Inr fs_v', EInr e' -> val_type_closed_under_history_extension (pack qt2) h fs_v' e'
     | _ -> false_elim ()
     end
+  | QNat -> ()
   end
 
 let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) :
@@ -260,6 +265,21 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
         introduce _ ==> _ with _. begin
           val_type_closed_under_history_extension (Some?.v (g x)) h (index fsG x) (s x)
         end
+      end
+    end
+  end
+
+let indexed_safety_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma
+    (requires t ⊇ (h, fs_e, e))
+    (ensures indexed_safe e h) =
+  introduce forall (e':closed_exp) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
+        assert (e_beh e e' h lt);
+        assert (t ∋ (h, fs_e, e') /\ lt == []);
+        lem_values_are_values t h fs_e e'
       end
     end
   end
@@ -335,7 +355,7 @@ let lem_unfold_in_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> 
   assert (((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)) <==> arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%arrow_in_body;
                                            `%get_rel;
-                                           `%(^->);
+                                           `%(^->); `%qArrR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -364,7 +384,7 @@ let lem_unfold_in_io_arrow_to_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_va
   assert (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body_direct t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%io_arrow_in_body_direct;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
@@ -379,15 +399,54 @@ let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp
   =
   lem_unfold_in_io_arrow_to_body_direct t1 t2 h fs_e1 e11
 
+let rec sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma (requires t ∋ (h, fs_e, e))
+        (ensures sem_value_shape (type_quotation_to_typ (get_rel t)) e)
+        (decreases get_rel t) =
+  lem_values_are_values t h fs_e e;
+  match (type_quotation_to_typ (get_rel t)) with
+  | TUnit
+  | TBool
+  | TFileDescr
+  | TString
+  | TNat
+  | TArr _ _ -> ()
+  | TPair ty1 ty2 -> begin
+    let QPair #t1 #t2 qt1 qt2 = get_rel t in
+    let EPair e1 e2 = e in
+    sem_expr_shape_val #(QTypes.pack qt1) (fst #t1 #t2 fs_e) e1 h;
+    sem_expr_shape_val #(QTypes.pack qt2) (snd #t1 #t2 fs_e) e2 h
+    end
+  | TSum ty1 ty2 -> begin
+    let QSum #t1 #t2 qt1 qt2 = get_rel t in
+    let fs_e : either t1 t2 = fs_e in
+    match fs_e, e with
+    | Inl fs_e', EInl e' -> sem_expr_shape_val #(QTypes.pack qt1) fs_e' e' h
+    | Inr fs_e', EInr e' -> sem_expr_shape_val #(QTypes.pack qt2) fs_e' e' h
+    | _ -> false_elim ()
+    end
+
+let sem_expr_shape_expr (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma (requires t ⊇ (h, fs_e, e))
+        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h)
+        (decreases get_rel t) =
+  introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
+    introduce _ ==> _ with _. begin
+      indexed_safety_val fs_e e h;
+      assert (t ∋ (h, fs_e, e'));
+      sem_expr_shape_val fs_e e' h
+    end
+  end
+
 let sem_expr_shape_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) :
   Lemma (requires t ⫄ (h, fs_e, e))
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
   introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
-    introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      assert (t ⫄ (h, fs_e, e));
+    introduce _ ==> _ with _. begin
+      indexed_safety_comp fs_e e h;
       eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
-      returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      lem_values_are_values t (h++lt) fs_r e'
+        returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+        sem_expr_shape_val #t fs_r e' (h++lt)
       end
     end
   end
@@ -413,7 +472,7 @@ let lem_unfold_in_io_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^
   assert (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body t1 t2 h fs_e1 e11)
     by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%io_arrow_in_body; `%io_arrow_wrap;
                                            `%get_rel;
-                                           `%(^->!@);
+                                           `%(^->!@); `%qArrIOR;
                                            `%Mkdtuple2?._2; `%Mkdtuple2?._1];
                                zeta; iota];
         FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];

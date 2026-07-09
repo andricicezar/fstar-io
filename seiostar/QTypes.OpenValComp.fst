@@ -15,35 +15,28 @@ type spec_env (g:typ_env) =
   eval_env g -> pure_pre
 
 type fs_oval (g:typ_env) (t:qType) (pre:spec_env g) =
-  fsG:eval_env g -> Pure (fs_val t) (requires (pre fsG)) (ensures (fun _ -> True))
+  fsG:(eval_env g){pre fsG} -> fs_val t
 
-unfold
 let spec_env_return (#g:typ_env) (#a:qType) (x:fs_val a) : spec_env g =
   fun _ -> True
 
-unfold
 let spec_env_bind (#g:typ_env) (#a:qType)
   (preM:spec_env g) (preK:spec_env (extend a g)) : spec_env g =
   fun fsG -> preM fsG /\ (forall (x:fs_val a). preK (stack fsG x))
 
-unfold
 let spec_env_bind' (#g:typ_env) (#a:qType)
   (preP:spec_env g) (preK:(fs_val a -> spec_env g)) : spec_env g =
   spec_env_bind preP (fun fsG -> preK (hd fsG) (tail fsG))
 
-unfold
 let spec_env_axiom (#g:typ_env) (#a:qType) : spec_env (extend a g) =
   fun _ -> True
 
-unfold
 let spec_env_weaken (#g:typ_env) (#b:qType) (x:spec_env g) : spec_env (extend b g) =
   fun fsG -> x (tail fsG)
 
-unfold
 let spec_env_index (#g:typ_env) (x:var{Some? (g x)}) : spec_env g =
   fun _ -> True
 
-unfold
 val spec_env_app : #g :typ_env ->
                 preF : spec_env g ->
                 preX : spec_env g ->
@@ -63,17 +56,14 @@ let spec_env_lambda_tot #g #a preBody fsG : pure_pre =
 type fs_comp (t:qType) = io (fs_val t)
 
 type fs_ocomp (g:typ_env) (t:qType) (pre:spec_env g) =
-  fsG:eval_env g -> Pure (fs_comp t) (requires (pre fsG)) (ensures (fun _ -> True))
+  fsG:(eval_env g){pre fsG} -> fs_comp t
 
-unfold
 let spec_env_return_comp (#g:typ_env) (#a:qType) (comp:fs_comp a) : spec_env g =
   fun _ -> True
 
-unfold
 let spec_env_return_oval (#g:typ_env) (#a:qType) #preX (x:fs_oval g a preX) : spec_env g =
   preX
 
-unfold
 val spec_env_if : #g :typ_env ->
                 #preC : spec_env g ->
                 c : fs_oval g qBool preC ->
@@ -83,7 +73,6 @@ val spec_env_if : #g :typ_env ->
 let spec_env_if #_ #preC c preT preE =
   (fun fsG -> preC fsG /\ (c fsG ==> preT fsG) /\ ((~(c fsG)) ==> preE fsG))
 
-unfold
 val spec_env_seq_ghost : #g:typ_env ->
                 ref:Type0 ->
                 preV:spec_env g ->
@@ -92,7 +81,6 @@ val spec_env_seq_ghost : #g:typ_env ->
 let spec_env_seq_ghost ref preV preK =
   fun fsG -> preV fsG /\ (ref ==> preK fsG)
 
-unfold
 val spec_env_ref : #g:typ_env ->
                 #preV:spec_env g ->
                 #a:qType ->
@@ -159,38 +147,18 @@ let fs_comp_case_val cond inlc inrc =
   | Inr x -> inrc x
 
 unfold
+let q_io_call (o:io_ops) (arg:fs_val (q_io_args o)) : fs_comp (q_io_res o) =
+  lem_q_io_args o;
+  lem_q_io_res o;
+  io_call o arg
+
+unfold
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
         fs_comp (q_io_res o)
 let fs_comp_call_val o args : fs_comp (q_io_res o) =
-  match o with
-  | OOpen  ->
-    let args : string = args in
-    let r : io (resexn file_descr) = io_call OOpen args in
-    assert (fs_val (q_io_res OOpen) == resexn file_descr)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | ORead  ->
-    let args : file_descr = args in
-    let r : io (resexn string) = io_call ORead args in
-    assert (fs_val (q_io_res ORead) == resexn string)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | OWrite ->
-    assert (fs_val (q_io_args OWrite) == file_descr * string)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    let args : file_descr * string = args in
-    let r : io (resexn unit) = io_call OWrite args in
-    assert (fs_val (q_io_res OWrite) == resexn unit)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | OClose ->
-    let args : file_descr = args in
-    let r : io (resexn unit) = io_call OClose args in
-    assert (fs_val (q_io_res OClose) == resexn unit)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
+  q_io_call o args
 
 (** Open values **)
 unfold
@@ -238,7 +206,6 @@ val fs_oval_app: #g : typ_env ->
 let fs_oval_app #_ #_ #_ #preF f #preX x fsG =
   (f fsG) (x fsG)
 
-
 unfold
 let fs_oval_lambda
   (#g :typ_env)
@@ -246,7 +213,8 @@ let fs_oval_lambda
   (#b :qType)
   (#preBody : spec_env (extend a g))
   (body :fs_oval (extend a g) b preBody)
-  : fs_oval g (a ^-> b) (spec_env_lambda_tot preBody)
+  : Tot (fs_oval g (a ^-> b) (spec_env_lambda_tot preBody))
+  by (FStar.Tactics.norm [delta_only [`%spec_env_lambda_tot]])
   = fun fsG ->
       fun x -> body (stack fsG x)
 
@@ -321,6 +289,18 @@ let spec_env_case #_ #_ #_ #preCond cond preInlc preInrc =
     (Inl? (cond fsG) ==> preInlc (stack fsG (Inl?.v (cond fsG)))) /\
     (Inr? (cond fsG) ==> preInrc (stack fsG (Inr?.v (cond fsG)))))
 
+val spec_env_case' : #g :typ_env ->
+                #a :qType ->
+                #b  : qType ->
+                cond : fs_val (a ^+ b) ->
+                preInlc : spec_env (extend a g) ->
+                preInrc : spec_env (extend b g) ->
+                spec_env g
+let spec_env_case' #_ #_ #_ cond preInlc preInrc =
+  (fun fsG ->
+    (Inl? cond ==> preInlc (stack fsG (Inl?.v cond))) /\
+    (Inr? cond ==> preInrc (stack fsG (Inr?.v cond))))
+
 unfold
 val fs_oval_case : #g :typ_env ->
                   #a  : qType ->
@@ -336,11 +316,22 @@ val fs_oval_case : #g :typ_env ->
 let fs_oval_case #_ #_ #_ #_ #preCond cond #preInlc inlc #preInrc inrc fsG =
   match cond fsG with
   | Inl x ->
+    assert (preInlc (stack fsG (Inl?.v (cond fsG))));
+    assert (x == (Inl?.v (cond fsG)));
+    assert (preInlc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
     inlc (stack fsG x)
   | Inr x ->
+    assert (preInrc (stack fsG (Inr?.v (cond fsG))));
+    assert (x == (Inr?.v (cond fsG)));
+    assert (preInrc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
     inrc (stack fsG x)
 
 (** Open computations **)
+
 unfold
 val fs_ocomp_return :
         g:typ_env ->
@@ -413,8 +404,7 @@ val fs_ocomp_call :
         args:fs_ocomp g (q_io_args o) preArgs ->
         fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
 let fs_ocomp_call o args =
-  fs_ocomp_bind' args (fun args' ->
-    fs_ocomp_return _ (fs_comp_call_val o args'))
+  fs_ocomp_bind' args (fun args' fsG -> q_io_call o args')
 
 unfold
 val fs_ocomp_call_oval :
@@ -422,9 +412,9 @@ val fs_ocomp_call_oval :
         o:io_ops ->
         #preArgs : spec_env g ->
         args:fs_oval g (q_io_args o) preArgs ->
-        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
+        fs_ocomp g (q_io_res o) preArgs
 let fs_ocomp_call_oval o args =
-  fs_ocomp_call o (fs_ocomp_return_oval args)
+  fun fsG -> q_io_call o (args fsG)
 
 unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->
@@ -433,7 +423,8 @@ val fs_oval_lambda_ocomp : #g :typ_env ->
                 #preBody : spec_env (extend a g) ->
                 body :fs_ocomp (extend a g) b preBody ->
                 fs_oval g (a ^->!@ b) (spec_env_lambda_tot preBody)
-let fs_oval_lambda_ocomp #_ #_ #_ #_ body fsG x = body (stack fsG x)
+let fs_oval_lambda_ocomp #_ #_ #_ #_ body fsG x =
+  body (stack fsG x)
 
 unfold
 val fs_ocomp_app_oval_oval :
@@ -495,11 +486,23 @@ val fs_ocomp_case_val : #g :typ_env ->
                 inlc : fs_ocomp (extend a g) c preInlc ->
                 #preInrc : spec_env (extend b g) ->
                 inrc : fs_ocomp (extend b g) c preInrc ->
-                fs_ocomp g c (fun fsG -> match cond with | Inl x -> preInlc (stack fsG x) | Inr x -> preInrc (stack fsG x))
-let fs_ocomp_case_val cond inlc inrc fsG =
+                fs_ocomp g c (spec_env_case' cond preInlc preInrc)
+let fs_ocomp_case_val cond #preInlc inlc #preInrc inrc fsG =
   match cond with
-  | Inl x -> inlc (stack fsG x)
-  | Inr x -> inrc (stack fsG x)
+  | Inl x ->
+    assert (preInlc (stack fsG (Inl?.v cond)));
+    assert (x == (Inl?.v cond));
+    assert (preInlc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
+    inlc (stack fsG x)
+  | Inr x ->
+    assert (preInrc (stack fsG (Inr?.v cond)));
+    assert (x == (Inr?.v cond));
+    assert (preInrc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
+    inrc (stack fsG x)
 
 unfold
 val fs_ocomp_case_oval : #g :typ_env ->
@@ -513,10 +516,22 @@ val fs_ocomp_case_oval : #g :typ_env ->
                 #preInrc : spec_env (extend b g) ->
                 inrc : fs_ocomp (extend b g) c preInrc ->
                 fs_ocomp g c (spec_env_case cond preInlc preInrc)
-let fs_ocomp_case_oval #_ #_ #_ #_ #preCond cond inlc inrc fsG =
+let fs_ocomp_case_oval #_ #_ #_ #_ #preCond cond #preInlc inlc #preInrc inrc fsG =
   match cond fsG with
-  | Inl x -> inlc (stack fsG x)
-  | Inr x -> inrc (stack fsG x)
+  | Inl x ->
+    assert (preInlc (stack fsG (Inl?.v (cond fsG))));
+    assert (x == (Inl?.v (cond fsG)));
+    assert (preInlc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
+    inlc (stack fsG x)
+  | Inr x ->
+    assert (preInrc (stack fsG (Inr?.v (cond fsG))));
+    assert (x == (Inr?.v (cond fsG)));
+    assert (preInrc (stack fsG x)) by (
+      let open FStar.Tactics in
+      rewrite_eqs_from_context ());
+    inrc (stack fsG x)
 
 val fs_ocomp_case : #g :typ_env ->
                 #a  : qType ->
@@ -528,10 +543,58 @@ val fs_ocomp_case : #g :typ_env ->
                 inlc : fs_ocomp (extend a g) c preInlc ->
                 #preInrc : spec_env (extend b g) ->
                 inrc : fs_ocomp (extend b g) c preInrc ->
-                fs_ocomp g c (spec_env_bind' #g #(a ^+ b) preCond (fun cond' -> fun fsG -> match cond' with | Inl x -> preInlc (stack fsG x) | Inr x -> preInrc (stack fsG x)))
+                fs_ocomp g c (spec_env_bind' #g #(a ^+ b) preCond (fun cond' -> spec_env_case' cond' preInlc preInrc))
 let fs_ocomp_case cond inlc inrc =
   fs_ocomp_bind' cond (fun cond' ->
     fs_ocomp_case_val cond' inlc inrc)
+
+let lem_spec_env_bind'_inst (#g:typ_env) (#a:qType)
+  (preP:spec_env g) (preK:fs_val a -> spec_env g)
+  (fsG:eval_env g) (x:fs_val a)
+  : Lemma
+    (requires spec_env_bind' preP preK fsG)
+    (ensures preP fsG /\ preK x fsG)
+  = lem_hd_stack #a #g fsG x;
+    lem_tail_stack_inverse #g fsG #a x;
+    assert (spec_env_bind' #g #a preP preK fsG ==
+      (preP fsG /\ (forall (y:fs_val a). preK (hd (stack fsG y)) (tail (stack fsG y)))))
+      by (let open FStar.Tactics.V1 in
+          norm [delta_only [`%spec_env_bind'; `%spec_env_bind]];
+          trefl ())
+
+let lem_stack_subst (#g:typ_env) (fsG:eval_env g) #t (v1 v2:get_Type t)
+  : Lemma (requires v1 == v2) (ensures stack fsG v1 == stack fsG v2)
+  = ()
+
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 4"
+let lem_spec_env_case'_inl
+  #g (#a #b:qType)
+  (preInlc:spec_env (extend a g))
+  (preInrc:spec_env (extend b g))
+  (fsG:eval_env g)
+  (x:fs_val a)
+  : Lemma
+    (requires (spec_env_case' #g #a #b (Inl x <: fs_val (a ^+ b)) preInlc preInrc) fsG)
+    (ensures preInlc (stack fsG x))
+  = let cond : fs_val (a ^+ b) = Inl x in
+    assert ((spec_env_case' #g #a #b cond preInlc preInrc) fsG ==
+            ((Inl? cond ==> preInlc (stack fsG (Inl?.v cond))) /\
+             (Inr? cond ==> preInrc (stack fsG (Inr?.v cond)))))
+      by (let open FStar.Tactics.V1 in norm [delta_only [`%spec_env_case']]; trefl ());
+    assert (Inl? cond);
+    assert (preInlc (stack fsG (Inl?.v cond)));
+    assert (Inl?.v cond == x);
+    lem_stack_subst fsG (Inl?.v cond) x;
+    assert (stack fsG (Inl?.v cond) == stack fsG x)
+#pop-options
+
+val spec_env_case_ex : #g :typ_env ->
+                #a :qType ->
+                preInlc : spec_env (extend a g) ->
+                spec_env (extend (qResexn a) g)
+let spec_env_case_ex #_ #_ preInlc =
+  (fun fsG ->
+    (Inl? (hd fsG) ==> preInlc (stack (tail fsG) (Inl?.v (hd fsG)))))
 
 let fs_ocomp_var (g:typ_env) (x:var{Some? (g x)}) : fs_ocomp g (Some?.v (g x)) (spec_env_bind' #g #(Some?.v (g x)) (spec_env_index x) (fun v -> spec_env_return_comp #g #(Some?.v (g x)) (io_return v))) =
   fs_ocomp_return_oval (fs_oval_var g x)
@@ -571,6 +634,7 @@ let fs_ocomp_pair x y =
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (fs_val_pair x' y')))
 
+unfold
 val fs_ocomp_string_eq : #g : typ_env ->
                          #preX : spec_env g ->
                          x : fs_ocomp g qString preX ->
@@ -581,3 +645,52 @@ let fs_ocomp_string_eq x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
+
+unfold
+let fs_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_val a) : fs_val a =
+  io_nrec n b f
+
+unfold
+let fs_oval_zero (g:typ_env) : fs_oval g qNat _ = fs_oval_return g 0
+
+unfold
+let fs_oval_succ (#g:typ_env) (#preN:spec_env g) (n:fs_oval g qNat preN) : fs_oval g qNat preN =
+  fun fsG -> n fsG + 1
+
+unfold
+let fs_oval_nrec
+  (#g:typ_env)
+  (#a:qType)
+  (#preN:spec_env g)
+  (n:fs_oval g qNat preN)
+  (#preB:spec_env g)
+  (b:fs_oval g a preB)
+  (#preF:spec_env g)
+  (f:fs_oval g (a ^-> a) preF)
+  : fs_oval g a (spec_env_app preN (spec_env_app preB preF)) =
+  fun fsG -> fs_nrec_val #a (n fsG) (b fsG) (f fsG)
+
+let rec fs_io_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_comp a) : fs_comp a =
+  if n = 0 then io_return b
+  else io_bind (f b) (fun b' -> fs_io_nrec_val #a (n-1) b' f)
+
+let rec fs_io_nrec_comp (#a:qType) (n:nat) (b:fs_comp a) (f:fs_comp (a ^->!@ a)) : fs_comp a =
+  if n = 0 then b
+  else fs_io_nrec_comp #a (n-1)
+    (fs_comp_bind f (fun f' ->
+      fs_comp_bind b (fun b' ->
+        f' b')))
+    f
+
+let fs_ocomp_nrec
+    (#g:typ_env)
+    (#a:qType)
+    (#preN:spec_env g)
+    (fn:fs_ocomp g qNat preN)
+    (#preB:spec_env g)
+    (fb:fs_ocomp g a preB)
+    (#preF:spec_env g)
+    (ff:fs_ocomp g (a ^->!@ a) preF)
+    : fs_ocomp g a (spec_env_bind' #g #qNat preN (fun _ -> spec_env_app preB preF)) =
+  fs_ocomp_bind' fn (fun n' ->
+    fun fsG -> fs_io_nrec_comp #a n' (fb fsG) (ff fsG))

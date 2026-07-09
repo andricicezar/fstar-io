@@ -69,7 +69,9 @@ let def_Runtime_io_read fd =
       make_inl (Obj.repr (Buffer.contents buf))
     with _ -> make_inr unit_val)
 
-let def_Runtime_io_write (fd : Obj.t) (msg : Obj.t) : Obj.t =
+let def_Runtime_io_write (pair : Obj.t) : Obj.t =
+  let fd = Obj.field pair 0 in
+  let msg = Obj.field pair 1 in
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
   | None -> make_inr unit_val

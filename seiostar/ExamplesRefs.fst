@@ -1,5 +1,7 @@
 module ExamplesRefs
 
+open Trace
+
 let refbool : (t:bool{t == true}) = true
 
 let falsepre : (x:bool{False} -> bool) =
@@ -55,11 +57,47 @@ let context
     if x then (f x)
     else (fun y -> y)
 
-// val pure_fun : b:bool -> Pure bool (requires b = true) (ensures fun r -> r = b)
-// let pure_fun b = true
+let needs_true (b:bool{b == true}) : bool = b
+let proj_into_refined
+  : (p:(bool & bool){fst p == true}) -> bool
+  = fun p -> needs_true (fst p)
 
-// val pure_fun_ref : f:(b:bool { b = true } -> bool){ forall b. b = true ==> f b = b }
-// let pure_fun_ref b = true
+let fun_beh_ref
+  : (f:(b:bool{b == true} -> bool){forall (b:bool{b == true}). f b == b})
+  = fun b -> true
 
-// val pure_fun : b:bool{ b == true } -> r:bool { r == b }
-// let pure_fun b = true
+let refined_pair_inner
+  : (x:bool) -> ((x:bool{x == true}) & y:bool{y == false})
+  = fun x ->
+  if x then (x, false) else (true, false)
+
+let refined_pair
+  : (x:bool) -> p:(bool & bool){fst p == true /\ snd p == false}
+  = fun x ->
+  if x then (x, false) else (true, false)
+
+assume val valid : string -> Type0
+
+let ret_refined_arg : (x:string{valid x}) -> (x:string{valid x}) = fun x -> x
+
+let inl_refined_arg : (x:string{valid x}) -> (resexn (x:string{valid x})) = fun x -> Inl x
+
+let pure_validate (x:string) (f:(string -> bool){forall x. f x ==> valid x}) : (resexn (x:string{valid x})) =
+  if f x
+  then Inl x
+  else Inr ()
+
+let pure_validate2 (x:string{valid x}) (f:(x:string{valid x} -> bool)) : bool = f x
+let pure_validate3 (x:string{valid x}) (f:(x:string{valid x} -> bool)) : (Trace.resexn (x:string{valid x})) =
+  if f x
+  then Inl x
+  else Inr ()
+
+type nat8 = x:nat{x <= 255}
+
+let incr_nat8 (p:nat8{p + 1 <= 255}) : nat8 =
+  p + 1
+
+
+let incr_nat8' : f:(x:nat8{x + 1 <= 255} -> nat8){forall x. f x == x + 1} =
+ fun x -> x + 1

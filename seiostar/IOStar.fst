@@ -4,6 +4,10 @@ open FStar.Tactics.V1
 
 include Trace
 
+val eq_string : string -> string -> bool
+let eq_string s t =
+  s = t
+
 (** Computational Monad **)
 
 noeq
@@ -29,13 +33,16 @@ let rec io_bind
 let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
   Call o args Return
 
-let return = io_return
-let (let!@) = io_bind
+unfold let return = io_return
+unfold let (let!@) = io_bind
 
-let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
+unfold let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
   | Inl x -> k x
   | Inr x -> io_return (Inr x)
+
+let rec io_nrec (#a:Type) (n:nat) (b:a) (f:a -> a) : a =
+  if n = 0 then b else io_nrec (n-1) (f b) f
 
 (** Specification monad **)
 

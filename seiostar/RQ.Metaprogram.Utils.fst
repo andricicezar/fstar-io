@@ -60,6 +60,28 @@ let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
     assert (typing_token g e (eff, ty));
     Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
 
+let lem_retype_token (g:env) (e:term) (ty:typ) (desired_ty:typ)
+  : Lemma
+    (requires typing_token g e (E_Total, ty) /\ equiv_token g desired_ty ty)
+    (ensures typing_token g e (E_Total, desired_ty)) =
+  Squash.bind_squash #(typing_token g e (E_Total, ty)) () (fun ty_tok ->
+    Squash.bind_squash #(equiv_token g desired_ty ty) () (fun eq_tok ->
+      let d_eq : related g desired_ty R_Eq ty =
+        Rel_eq_token g desired_ty ty (Squash.return_squash eq_tok) in
+      let d_eq_sym : related g ty R_Eq desired_ty =
+        Rel_sym g desired_ty ty d_eq in
+      let d_sub : related g ty R_Sub desired_ty =
+        Rel_equiv g ty desired_ty R_Sub d_eq_sym in
+      let d_sub_comp : related_comp g (E_Total, ty) R_Sub (E_Total, desired_ty) =
+        Relc_typ g ty desired_ty E_Total R_Sub d_sub in
+      let d_typ : typing g e (E_Total, ty) =
+        T_Token g e (E_Total, ty) (Squash.return_squash ty_tok) in
+      let d_res : typing g e (E_Total, desired_ty) =
+        T_Sub g e (E_Total, ty) (E_Total, desired_ty) d_typ d_sub_comp in
+      let d_res_tok : typing_token g e (E_Total, desired_ty) =
+        typing_to_token d_res in
+      Squash.return_squash d_res_tok))
+
 let rec fold_left (f:'a -> 'b -> 'a) (acc:'a) (l:list 'b) : Tot 'a (decreases l)=
   match l with
   | [] -> acc
@@ -77,6 +99,52 @@ let get_fv (head:term) : option string =
   | Tv_FVar fv -> Some (fv_to_string fv)
   | Tv_UInst fv _ -> Some (fv_to_string fv)
   | _ -> None
+
+(** Extract the fully-qualified name of a top-level definition referenced by a
+    term (an [FVar]/[UInst]). *)
+let fv_name_of_term (t:term) : option name =
+  match inspect_ln t with
+  | Tv_FVar fv | Tv_UInst fv _ -> Some (inspect_fv fv)
+  | _ -> None
+
+(** Read the declared (possibly refined) F* type of a top-level symbol out of
+    the environment [g] with [lookup_typ] (we do NOT re-typecheck anything). *)
+let lookup_fstar_type (g:env) (nm:name) : option typ =
+  match lookup_typ g nm with
+  | Some se ->
+    (match FStar.Stubs.Reflection.V2.Builtins.inspect_sigelt se with
+     | FStar.Stubs.Reflection.V2.Data.Sg_Val _ _ ty -> Some ty
+     | FStar.Stubs.Reflection.V2.Data.Sg_Let _ lbs ->
+       let rec find (ls:list FStar.Stubs.Reflection.Types.letbinding) : option typ =
+         match ls with
+         | [] -> None
+         | lb :: rest ->
+           let lbv = FStar.Stubs.Reflection.V2.Builtins.inspect_lb lb in
+           if inspect_fv lbv.lb_fv = nm then Some lbv.lb_typ
+           else find rest
+       in
+       find lbs
+     | _ -> None)
+  | None -> None
+
+(** Recover the (possibly refined) declared F* type of a term that is either a
+    bound variable or a top-level name. For a bound variable the metaprogram
+    never pushes binders into the reflection env, so its type comes from its own
+    [sort]; for a top-level (closed) name the declared type is read out of the
+    environment [g] (see [lookup_fstar_type]). Used both to thread an application
+    head's refined domain onto its argument (otherwise the argument's refinement
+    defaults to [trivial_ref0], i.e. [fun _ -> True]) and to obtain the type of
+    the top-level program being derived.
+
+    The [Tac] effect is needed solely for [unseal] in the bound-variable case
+    (the binder's [sort] is a [sealed typ]); the top-level lookup is pure. *)
+let head_fstar_type (g:env) (hd:term) : Tac (option typ) =
+  match inspect_ln hd with
+  | Tv_BVar v -> Some (unseal (inspect_bv v).sort)
+  | _ ->
+    (match fv_name_of_term hd with
+     | Some nm -> lookup_fstar_type g nm
+     | None -> None)
 
 let rec print_nat (n:nat) : string =
   match n with
@@ -122,3 +190,13 @@ let branch_to_string (b:branch) : Tac string =
 
 let branches_to_string (brs:list branch) : Tac string =
   FStar.Tactics.Util.fold_left (fun acc b -> acc ^ (branch_to_string b) ^ "; ") "" brs
+
+let unk = pack_ln Tv_Unknown
+
+let try_to_unfold_fv nfv (qt:term) : Tac (option term) =
+  let qt' = norm_term_env (top_env ()) [delta_only [nfv]; zeta] qt in
+  match inspect_ln qt' with
+  | Tv_FVar fv' ->
+  if nfv = fv_to_string fv' then None
+  else Some qt'
+  | _ -> Some qt'

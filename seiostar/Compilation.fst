@@ -30,6 +30,9 @@ let rec compile #g #a #pre (#s:fs_oval g a pre) (qs:g ⊢ s) : Tot exp (decrease
   | QInl qp -> EInl (compile qp)
   | QInr qp -> EInr (compile qp)
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
+  | QZero -> EZero
+  | QSucc qn -> ESucc (compile qn)
+  | QNRec qn qbase qf -> ENRec (compile qn) (compile qbase) (compile qf)
   | QLambdaIO qbody -> ELam (compile_ocomp qbody)
   // | QSeqGhost _ _ qk -> compile qk  -- QSeqGhost is commented out in RQ.TypingRelation
   | QRef qv -> compile qv
@@ -91,6 +94,15 @@ let rec lem_compile_superset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s
     lem_compile_superset qinlc;
     lem_compile_superset qinrc;
     C1.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> C1.compat_oval_zero g
+  | QSucc #_ #_ #n qn ->
+    lem_compile_superset qn;
+    C1.compat_oval_succ n (compile qn)
+  | QNRec #_ #a #_ #n #_ #base #_ #f qn qbase qf ->
+    lem_compile_superset qn;
+    lem_compile_superset qbase;
+    lem_compile_superset qf;
+    C1.compat_oval_nrec #_ #a n base f (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #_ #_ #_ #body qbody ->
     lem_compile_superset_comp qbody;
     C1.compat_oval_lambda_ocomp body (compile_ocomp qbody)
@@ -178,6 +190,15 @@ let rec lem_compile_subset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s)
     lem_compile_subset qinlc;
     lem_compile_subset qinrc;
     C2.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> C2.compat_oval_zero g
+  | QSucc #_ #_ #n qn ->
+    lem_compile_subset qn;
+    C2.compat_oval_succ n (compile qn)
+  | QNRec #_ #a #_ #n #_ #base #_ #f qn qbase qf ->
+    lem_compile_subset qn;
+    lem_compile_subset qbase;
+    lem_compile_subset qf;
+    C2.compat_oval_nrec #_ #a n base f (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #_ #_ #_ #body qbody ->
     lem_compile_subset_comp qbody;
     C2.compat_oval_lambda_ocomp body (compile_ocomp qbody)
@@ -265,6 +286,15 @@ let rec lem_compile_fv_in_env #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ 
     lem_compile_fv_in_env qinlc;
     lem_compile_fv_in_env qinrc;
     lem_fv_in_env_case g ta tb (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> lem_fv_in_env_zero g
+  | QSucc qn ->
+    lem_compile_fv_in_env qn;
+    lem_fv_in_env_succ g (compile qn)
+  | QNRec qn qbase qf ->
+    lem_compile_fv_in_env qn;
+    lem_compile_fv_in_env qbase;
+    lem_compile_fv_in_env qf;
+    lem_fv_in_env_nrec g (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #qa #_ #body qbody ->
     lem_compile_fv_in_env_prod qbody;
     lem_fv_in_env_lam g qa (compile_ocomp qbody)
@@ -300,34 +330,69 @@ and lem_compile_fv_in_env_prod #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typi
     lem_compile_fv_in_env_prod qinrc;
     lem_fv_in_env_case g ta tb (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
-let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
-  (qs:(a ^->!@ b) ⊫ s)
-  : Lemma (requires (QLambdaIO? qs._3))
-          (ensures (ELam? (compile qs._3)))
-  =
-  match qs._3 with
-  | QLambdaIO qbody ->
-    assert (ELam? (compile qs._3)) by (norm [delta_once [`%compile];zeta;iota])
+let rec is_lambda_io #g (#a:qType) #pre (#s:fs_oval g a pre)
+  (qs:(g ⊢ s)) : Tot Type0 (decreases qs) =
+  match qs with
+  | QLambdaIO _ -> True
+  | QRef qv -> is_lambda_io qv
+  | _ -> False
 
-let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
-  : Lemma (is_closed (compile qs._3))
-  = lem_compile_fv_in_env qs._3
+let rec _lem_lambda_io_elam #g (#a:qType) #pre (#s:fs_oval g a pre) (qs:g ⊢ s)
+  : Lemma (requires is_lambda_io qs)
+          (ensures ELam? (compile qs))
+          (decreases qs) =
+  match qs with
+  | QRef qbody -> _lem_lambda_io_elam qbody
+  | QLambdaIO _ -> ()
+  | _ -> ()
+
+let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
+  (qs:(a ^->!@ b) ⊩ s)
+  : Lemma (requires (is_lambda_io qs._2))
+          (ensures (ELam? (compile qs._2)))
+  = _lem_lambda_io_elam qs._2
+
+let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
+  : Lemma (is_closed (compile qs._2))
+  = lem_compile_fv_in_env qs._2;
+    lem_no_fv_is_closed (compile qs._2)
+
+let _lem_compile_closed_valid (#a:qType) (#pre:spec_env empty) (#s:fs_oval empty a pre) (qs:empty ⊢ s)
+  : Lemma (requires (is_lambda_io qs /\ pre empty_eval))
+          (ensures (
+        is_closed (compile qs) /\
+        is_value (compile qs) /\
+        valid_contains #a (s empty_eval) (compile qs) /\
+        valid_member_of #a (s empty_eval) (compile qs)))
+        (decreases qs) =
+  match qs with
+  | QRef qv ->
+    lem_compile_fv_in_env qs;
+    lem_no_fv_is_closed (compile qs);
+    _lem_lambda_io_elam qs;
+    assert (ELam? (compile qs));
+    assert (is_value (compile qs));
+    lem_compile_superset qs;
+    lem_value_superset_valid_contains a s (compile qs);
+    lem_compile_subset qs;
+    lem_value_subset_valid_member_of a s (compile qs)
+  | QLambdaIO #_ #b #c qbody ->
+    lem_compile_fv_in_env qs;
+    lem_no_fv_is_closed (compile qs);
+    _lem_lambda_io_elam qs;
+    assert (ELam? (compile qs));
+    assert (is_value (compile qs));
+    lem_compile_superset qs;
+    lem_value_superset_valid_contains a s (compile qs);
+    lem_compile_subset qs;
+    lem_value_subset_valid_member_of a s (compile qs)
 
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
   : Lemma
-    (requires (QLambdaIO? qs._3))
+    (requires (is_lambda_io qs._1._2))
     (ensures (
-        is_closed (compile qs._3) /\
-        is_value (compile qs._3) /\
-        valid_contains s (compile qs._3) /\
-        valid_member_of s (compile qs._3)
-      )) =
-  match qs._3 with
-  | QLambdaIO #_ #b #c qbody ->
-    lem_compile_is_closed qs;
-    lem_compile_closed_arrow_is_elam #b #c #s qs;
-    assert (is_value (compile qs._3));
-    lem_compile_superset qs._3;
-    lem_value_superset_valid_contains a #qs._1 (fun _ -> s) (compile qs._3);
-    lem_compile_subset qs._3;
-    lem_value_subset_valid_member_of a (fun _ -> s) (compile qs._3)
+        is_closed (compile qs._1._2) /\
+        is_value (compile qs._1._2) /\
+        valid_contains s (compile qs._1._2) /\
+        valid_member_of s (compile qs._1._2))) =
+  _lem_compile_closed_valid qs._1._2
