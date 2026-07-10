@@ -11,10 +11,11 @@ open GuardedDMFree
 
     The underlying representation of `mio_dm` (defined in MIO.Sig on top of
     lib's DMFree/GuardedDMFree) is the free monad over
-    `cmd_sum guard_cmd (mio_cmds mst)`: guard commands (GCmd) play the role
-    that the old `PartialCall` constructor played. Therefore the flag
-    predicate `satisfies` is defined on this guarded carrier and always
-    allows guard commands, no matter the flag. **)
+    `cmd_sum guard_cmd (mio_cmds mst)` on the first channel (the second
+    channel is instantiated with the empty signature): guard commands
+    (GCmd) play the role that the old `PartialCall` constructor played.
+    Therefore the flag predicate `satisfies` is defined on this guarded
+    carrier and always allows guard commands, no matter the flag. **)
 
 (** ** Types **)
 
@@ -39,7 +40,9 @@ let rec satisfies #mst #a (m:mio mst a) (flag:tflag) : Tot Type0 (decreases m) =
   match flag, m with
   | AllOps, _      -> True
   | _, Return _    -> True
-  | _, Call op k   -> allows flag op /\ (forall r. satisfies (k r) flag)
+  | _, Call1 op k  -> allows flag op /\ (forall r. satisfies (k r) flag)
+  (* the second channel carries the empty signature: no Call2 node exists *)
+  | _, Call2 op k  -> True
 
 let (⊕) (flag1:tflag) (flag2:tflag) : tflag =
   match flag1, flag2 with
@@ -79,10 +82,11 @@ let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : mio mst 'a) :
   Lemma (ensures satisfies m f1 ==> satisfies m f2) (decreases m) =
   match m with
   | Return _ -> ()
-  | Call op k ->
+  | Call1 op k ->
     allows_le f1 f2 op;
     Classical.forall_intro
      ((fun r -> sat_le f1 f2 (k r)) <: r:_ -> Lemma (satisfies (k r) f1 ==> satisfies (k r) f2))
+  | Call2 op k -> ()
 
 let rec sat_bind #mst (fl:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
   : Lemma (ensures v `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind v f `satisfies` fl)
@@ -90,9 +94,10 @@ let rec sat_bind #mst (fl:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
   =
   match v with
   | Return _ -> ()
-  | Call op k ->
+  | Call1 op k ->
     Classical.forall_intro
      ((fun r -> sat_bind fl (k r) f) <: r:_ -> Lemma ((k r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind (k r) f `satisfies` fl))
+  | Call2 op k -> ()
 
 let sat_bind_add #mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
   : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind v f `satisfies` (fl_v ⊕ fl_f))
@@ -120,7 +125,7 @@ type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist #event a) =
   t:(mio_dm mst a wp){t `satisfies` flag}
 
 let dm_gmio_theta #a #mst (m:mio mst a) : hist #event a =
-  theta (cmd_wp_sum guard_cmd_wp mio_cwp) m
+  theta (cmd_wp_sum guard_cmd_wp mio_cwp) empty_cmd_wp m
 
 let dm_gmio_return (a:Type) (x:a) (mst:mstate) : dm_gmio a mst NoOps (hist_return x) by (compute ()) =
   mio_dm_return mst x
@@ -190,7 +195,8 @@ let dm_gmio_guard_return
 
 (** Note: like in GuardedDMFree.lift_pure_gdm, the subcomp query here is
     sensitive to quantifier instantiation; it only goes through when split
-    off from the rest of the VC, with ifuel 2. **)
+    off from the rest of the VC, with ifuel 2 and the WP inclusion asserted
+    explicitly. **)
 #push-options "--z3rlimit 80 --ifuel 2 --split_queries always"
 val lift_pure_dm_gmio :
   a: Type u#a ->
@@ -207,6 +213,7 @@ let lift_pure_dm_gmio a mst w f =
     let r = f () in
     dm_gmio_return a r mst in
   let m = dm_gmio_bind _ a mst NoOps (guard_wp #event (as_requires w)) NoOps (fun _ -> wp_lift_pure_hist w) lhs rhs in
+  assert (hist_bind (guard_wp #event (as_requires w)) (fun _ -> wp_lift_pure_hist w) ⊑ wp_lift_pure_hist #a #event w);
   dm_gmio_subcomp a mst NoOps _ NoOps _ m
 #pop-options
 

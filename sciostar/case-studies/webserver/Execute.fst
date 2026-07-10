@@ -12,7 +12,7 @@ exception Something_went_really_bad
 let rec skip_partial_calls (tree: mio mymst int { forall h. dm_gmio_theta tree the_p h }) : ML int =
   match tree with
   | Return y -> y
-  | Call (CmdL (GCmd pre)) k -> begin
+  | Call1 (CmdL (GCmd pre)) k -> begin
     (** The intuition here is that the pre-condition is true,
     thus, all asserts are true **)
    assert (dm_gmio_theta tree the_p []);

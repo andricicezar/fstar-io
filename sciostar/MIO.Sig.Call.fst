@@ -9,4 +9,4 @@ assume val print_string2 : string -> Tot bool
 implementation of the commands. **)
 
 let mio_call (#mst:mstate) caller (op:mio_ops) (arg:(mio_sig mst).args op) : mio mst ((mio_sig mst).res op arg) =
-  Call (CmdR (OpCall caller op arg)) Return
+  Call1 (CmdR (OpCall caller op arg)) Return

@@ -24,44 +24,62 @@ let guard_cmd_wp (#event:Type) : cmd_wp guard_cmd event =
 let guard_wp (#event:Type) (pre:pure_pre) : hist #event (squash pre) =
   guard_cmd_wp #event (GCmd pre)
 
+(** The guard commands are Type0-indexed and live on the first channel,
+    summed with the client's cmd1. The second channel is passed through
+    untouched, so its index universe is unconstrained by the guards. *)
 // The Dijkstra Monad
-type gdm (cmd:Type -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
-  (m:(free (cmd_sum guard_cmd cmd) a){theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp})
+type gdm (cmd1:Type -> Type) (cmd2:Type -> Type) (event:Type)
+  (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event)
+  (a:Type) (wp:hist #event a) =
+  (m:(free (cmd_sum guard_cmd cmd1) cmd2 a){theta (cmd_wp_sum guard_cmd_wp cwp1) cwp2 m ⊑ wp})
 
-let gdm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : gdm cmd event cwp a (hist_return #a #event x) =
-  dm_return (cmd_wp_sum guard_cmd_wp cwp) x
+let gdm_return #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event) #a (x : a)
+  : gdm cmd1 cmd2 event cwp1 cwp2 a (hist_return #a #event x) =
+  dm_return (cmd_wp_sum guard_cmd_wp cwp1) cwp2 x
 
 #push-options "--z3rlimit 20"
-let gdm_cmd #cmd (#event:Type) (cwp:cmd_wp cmd event) #r (op:cmd r) :
-  gdm cmd event cwp r (hist_bind (cwp op) (fun ri -> hist_return ri)) =
-  Call (CmdR op) Return
+let gdm_cmd1 #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event) #r (op:cmd1 r) :
+  gdm cmd1 cmd2 event cwp1 cwp2 r (hist_bind (cwp1 op) (fun ri -> hist_return ri)) =
+  let m : free (cmd_sum guard_cmd cmd1) cmd2 r = Call1 (CmdR op) Return in
+  assert (theta (cmd_wp_sum guard_cmd_wp cwp1) cwp2 m == hist_bind (cwp1 op) (fun ri -> hist_return ri))
+    by (compute ());
+  m
+
+let gdm_cmd2 #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event) #r (op:cmd2 r) :
+  gdm cmd1 cmd2 event cwp1 cwp2 r (hist_bind (cwp2 op) (fun ri -> hist_return ri)) =
+  let m : free (cmd_sum guard_cmd cmd1) cmd2 r = Call2 op Return in
+  assert (theta (cmd_wp_sum guard_cmd_wp cwp1) cwp2 m == hist_bind (cwp2 op) (fun ri -> hist_return ri))
+    by (compute ());
+  m
 #pop-options
 
 let gdm_bind
-  #cmd (#event:Type) (cwp:cmd_wp cmd event)
+  #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event)
   #a #b
   (wp_v : hist #event a)
   (wp_f: a -> hist #event b)
-  (v : gdm cmd event cwp a wp_v)
-  (f : (x:a -> gdm cmd event cwp b (wp_f x))) :
-  Tot (gdm cmd event cwp b (hist_bind wp_v wp_f)) =
-  dm_bind (cmd_wp_sum guard_cmd_wp cwp) wp_v wp_f v f
+  (v : gdm cmd1 cmd2 event cwp1 cwp2 a wp_v)
+  (f : (x:a -> gdm cmd1 cmd2 event cwp1 cwp2 b (wp_f x))) :
+  Tot (gdm cmd1 cmd2 event cwp1 cwp2 b (hist_bind wp_v wp_f)) =
+  dm_bind (cmd_wp_sum guard_cmd_wp cwp1) cwp2 wp_v wp_f v f
 
-let gdm_subcomp #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (wp1 wp2: hist #event a) (f : gdm cmd event cwp a wp1) :
-  Pure (gdm cmd event cwp a wp2)
+let gdm_subcomp #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event) #a
+  (wp1 wp2: hist #event a) (f : gdm cmd1 cmd2 event cwp1 cwp2 a wp1) :
+  Pure (gdm cmd1 cmd2 event cwp1 cwp2 a wp2)
     (requires wp1 ⊑ wp2)
     (ensures fun _ -> True) =
   f
 
-let gdm_if_then_else #cmd (#event:Type) (cwp:cmd_wp cmd event) #a
-  (wp1 wp2: hist #event a) (f : gdm cmd event cwp a wp1) (g : gdm cmd event cwp a wp2) (b : bool) : Type =
-  gdm cmd event cwp a (hist_if_then_else wp1 wp2 b)
+let gdm_if_then_else #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event) #a
+  (wp1 wp2: hist #event a)
+  (f : gdm cmd1 cmd2 event cwp1 cwp2 a wp1) (g : gdm cmd1 cmd2 event cwp1 cwp2 a wp2) (b : bool) : Type =
+  gdm cmd1 cmd2 event cwp1 cwp2 a (hist_if_then_else wp1 wp2 b)
 
 let gdm_guard
-  #cmd (#event:Type) (cwp:cmd_wp cmd event)
-  (pre:pure_pre) : gdm cmd event cwp (squash pre) (guard_wp #event pre) =
-  let m = Call (CmdL (GCmd pre)) (Return) in
-  assert (theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ (guard_wp #event pre));
+  #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event)
+  (pre:pure_pre) : gdm cmd1 cmd2 event cwp1 cwp2 (squash pre) (guard_wp #event pre) =
+  let m = Call1 (CmdL (GCmd pre)) (Return) in
+  assert (theta (cmd_wp_sum guard_cmd_wp cwp1) cwp2 m ⊑ (guard_wp #event pre));
   m
 
 (** Note: the subcomp query (query 6 under --split_queries always) is a
@@ -69,17 +87,20 @@ let gdm_guard
     for PURE WP semantics; it also fails on the original (pre-refactor) code
     without --split_queries. We use assume here. **)
 #push-options "--z3rlimit 40"
-val lift_pure_gdm : #cmd:(Type -> Type) -> #event:Type -> cwp:cmd_wp cmd event -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> gdm cmd event cwp a (wp_lift_pure_hist w)
-let lift_pure_gdm #cmd (#event:Type) (cwp:cmd_wp cmd event)
+val lift_pure_gdm : #cmd1:(Type -> Type) -> #cmd2:(Type -> Type) -> #event:Type ->
+  cwp1:cmd_wp cmd1 event -> cwp2:cmd_wp cmd2 event ->
+  #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) ->
+  gdm cmd1 cmd2 event cwp1 cwp2 a (wp_lift_pure_hist w)
+let lift_pure_gdm #cmd1 #cmd2 (#event:Type) (cwp1:cmd_wp cmd1 event) (cwp2:cmd_wp cmd2 event)
   #a
   (w : pure_wp a)
   (f:(eqtype_as_type unit -> PURE a w)) :
-  gdm cmd event cwp a (wp_lift_pure_hist w) =
+  gdm cmd1 cmd2 event cwp1 cwp2 a (wp_lift_pure_hist w) =
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
-  let lhs = gdm_guard cwp (as_requires w) in
-  let rhs (_:squash (as_requires w)) : gdm cmd event cwp a (wp_lift_pure_hist w) =
+  let lhs = gdm_guard cwp1 cwp2 (as_requires w) in
+  let rhs (_:squash (as_requires w)) : gdm cmd1 cmd2 event cwp1 cwp2 a (wp_lift_pure_hist w) =
     let r = f () in
-    gdm_return cwp r in
-  gdm_bind cwp (guard_wp #event (as_requires w)) (fun _ -> wp_lift_pure_hist w) lhs rhs
+    gdm_return cwp1 cwp2 r in
+  gdm_bind cwp1 cwp2 (guard_wp #event (as_requires w)) (fun _ -> wp_lift_pure_hist w) lhs rhs
 #pop-options

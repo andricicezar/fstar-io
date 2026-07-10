@@ -132,7 +132,7 @@ type mio_cmds (mst:mstate) : Type0 -> Type0 =
 // THE MIO FREE MONAD
 (** Guard commands (GCmd, from lib.GuardedDMFree) are summed into the
     carrier: they play the role the old PartialCall constructor played. **)
-type mio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) a
+type mio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) empty_cmds a
 
 let mio_return #mst (x:'a) : mio mst 'a =
   free_return x
@@ -207,10 +207,10 @@ unfold let mio_cwp #mst : cmd_wp (mio_cmds mst) event =
     with the MIO commands/events **)
 
 let mio_dm (mst:mstate) (a:Type) (wp:hist #event a) : Type =
-  gdm (mio_cmds mst) event mio_cwp a wp
+  gdm (mio_cmds mst) empty_cmds event mio_cwp empty_cmd_wp a wp
 
 let mio_dm_return (mst:mstate) #a (x:a) : mio_dm mst a (hist_return #a #event x) =
-  gdm_return mio_cwp x
+  gdm_return mio_cwp empty_cmd_wp x
 
 #push-options "--z3rlimit 40"
 let mio_dm_bind (mst:mstate) #a #b
@@ -219,22 +219,22 @@ let mio_dm_bind (mst:mstate) #a #b
   (v : mio_dm mst a wp_v)
   (f : (x:a -> mio_dm mst b (wp_f x))) :
   Tot (mio_dm mst b (hist_bind wp_v wp_f)) =
-  gdm_bind mio_cwp wp_v wp_f v f
+  gdm_bind mio_cwp empty_cmd_wp wp_v wp_f v f
 #pop-options
 
 let mio_dm_subcomp (mst:mstate) #a (wp1 wp2 : hist #event a) (f : mio_dm mst a wp1) :
   Pure (mio_dm mst a wp2)
     (requires wp1 ⊑ wp2)
     (ensures fun _ -> True) =
-  gdm_subcomp mio_cwp wp1 wp2 f
+  gdm_subcomp mio_cwp empty_cmd_wp wp1 wp2 f
 
 let mio_dm_if_then_else (mst:mstate) #a
   (wp1 wp2 : hist #event a) (f : mio_dm mst a wp1) (g : mio_dm mst a wp2) (b : bool) : Type =
-  gdm_if_then_else mio_cwp wp1 wp2 f g b
+  gdm_if_then_else mio_cwp empty_cmd_wp wp1 wp2 f g b
 
 let mio_dm_guard_return (mst:mstate)
   (pre:pure_pre) : mio_dm mst (squash pre) (guard_wp pre) =
-  gdm_guard mio_cwp pre
+  gdm_guard mio_cwp empty_cmd_wp pre
 
 val mio_dm_lift_pure : mst:mstate -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> mio_dm mst a (wp_lift_pure_hist w)
 let mio_dm_lift_pure (mst:mstate) #a
