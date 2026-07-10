@@ -3,7 +3,8 @@ FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
 ROOTS := MIO.Sig.fst \
-	     MST.Repr.fst 
+	     MST.Repr.fst \
+	     MST.Soundness.fst
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
 FLAGS  = --z3version 4.15.3
