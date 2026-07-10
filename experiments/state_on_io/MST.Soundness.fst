@@ -8,8 +8,9 @@ module MST.Soundness
     state-based WPs. Unlike the original (which also defines its own free
     monad), the representation here is built from the free monad of this
     development: the two-channel `Free.free`, with mst_cmds on the first
-    channel and heap_cmds (get_heap) on the second. Like the original, the
-    guards (PartialCall there) are out of scope.
+    channel and the second channel unused (instantiated with the empty
+    signature). Like the original, the guards (PartialCall there) and
+    get_heap are out of scope.
 
     theta is defined parameterized by an abstract `witnessed`
     predicate-transformer: soundness of witness/recall relies on the
@@ -56,14 +57,14 @@ type mst_cmds : Type0 -> Type u#1 =
 | CWitness : heap_predicate_stable -> mst_cmds unit
 | CRecall  : heap_predicate_stable -> mst_cmds unit
 
-(** get_heap: its result (erased heap) lives at universe 1, so it goes on
-    the second channel of the free monad. *)
-noeq
-type heap_cmds : Type u#1 -> Type u#1 =
-| CGetHeap : heap_cmds (erased heap)
+(** The representation: the two-channel free monad of this development,
+    with the second channel unused. *)
+let mst_repr (a:Type) = free mst_cmds (empty_cmds u#0 u#0) a
 
-(** The representation: the two-channel free monad of this development. *)
-let mst_repr (a:Type) = free mst_cmds heap_cmds a
+(** Eliminates an impossible second-channel command. *)
+let empty_elim (#r:Type0) (#a:Type) (op:empty_cmds u#0 u#0 r) : a =
+  allow_inversion (empty_cmds u#0 u#0 r);
+  false_elim ()
 
 let state_wp a = (a -> heap -> Type0) -> (heap -> Type0)
 
@@ -106,10 +107,6 @@ unfold
 let recall_wp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_stable) : state_wp unit =
   fun p h -> witnessed pred /\ (pred h ==> p () h)
 
-unfold
-let get_heap_wp : state_wp (erased heap) =
-  fun p h0 -> p (hide h0) h0
-
 (** State-based WP of a first-channel command.
     (Note: destructing the command inside a `Call1` pattern trips universe
     inference, so the dispatch lives in a helper where `r` is a regular
@@ -122,17 +119,12 @@ let cmd_st_wp (witnessed:heap_predicate_stable -> Type0) (#r:Type0) (op:mst_cmds
   | CWitness pred          -> witness_wp witnessed pred
   | CRecall pred           -> recall_wp witnessed pred
 
-(** State-based WP of a second-channel command (get_heap). *)
-let heap_cmd_st_wp (#r:Type u#1) (op:heap_cmds r) : state_wp r =
-  match op with
-  | CGetHeap -> get_heap_wp
-
 let rec theta (witnessed:heap_predicate_stable -> Type0) #a (m:mst_repr a)
   : Tot (state_wp a) (decreases m) =
   match m with
   | Return x -> state_wp_return x
   | Call1 _ op k -> state_wp_bind (cmd_st_wp witnessed op) (fun x -> theta witnessed (k x))
-  | Call2 _ op k -> state_wp_bind (heap_cmd_st_wp op) (fun x -> theta witnessed (k x))
+  | Call2 _ op k -> empty_elim op
 
 (** Every recall must be preceded by a witness of the same predicate. *)
 let rec witnessed_before #a (preds:S.set heap_predicate_stable) (m:mst_repr a) : Tot Type0 (decreases m) =
@@ -143,7 +135,7 @@ let rec witnessed_before #a (preds:S.set heap_predicate_stable) (m:mst_repr a) :
      | CWitness pred -> (S.union preds (S.singleton pred)) `witnessed_before` (k ())
      | CRecall pred  -> pred `S.mem` preds /\ preds `witnessed_before` (k ())
      | _             -> forall x. preds `witnessed_before` (k x))
-  | Call2 _ _ k -> forall x. preds `witnessed_before` (k x)
+  | Call2 _ op k -> empty_elim op
 
 type heap_w_preds =
   hp:(heap & S.set heap_predicate_stable){forall (pred:heap_predicate_stable). pred `S.mem` (snd hp) ==> pred (fst hp)}
@@ -192,13 +184,7 @@ let rec run_mst_with_preds #a
          run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post (fst h0, hp)
      | CRecall pred ->
          run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post h0)
-  | Call2 _ op k ->
-    (match op with
-     | CGetHeap ->
-         (* coerce_eq avoids the (ghost) reveal coercion the elaborator
-            inserts when applying k directly to an erased value *)
-         let h = coerce_eq () (hide (fst h0)) in
-         run_mst_with_preds (theta witnessed_trivial (k h)) (k h) post h0)
+  | Call2 _ op k -> empty_elim op
 #pop-options
 
 let run_mst #a
