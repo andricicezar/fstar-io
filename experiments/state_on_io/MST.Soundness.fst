@@ -7,9 +7,9 @@ module MST.Soundness
     on MST.Repr, but defines its own copies of the MST commands and their
     state-based WPs. Unlike the original (which also defines its own free
     monad), the representation here is built from the free monad of this
-    development: the two-channel `Free.free`, with guards + mst_cmds on the
-    first channel and heap_cmds (get_heap) on the second — the carrier
-    shape of GuardedDMFree.gdm.
+    development: the two-channel `Free.free`, with mst_cmds on the first
+    channel and heap_cmds (get_heap) on the second. Like the original, the
+    guards (PartialCall there) are out of scope.
 
     theta is defined parameterized by an abstract `witnessed`
     predicate-transformer: soundness of witness/recall relies on the
@@ -24,7 +24,6 @@ open FStar.Monotonic.Heap
 open FStar.Ghost
 
 open Free
-open GuardedDMFree
 
 module S = FStar.TSet
 
@@ -63,9 +62,8 @@ noeq
 type heap_cmds : Type u#1 -> Type u#1 =
 | CGetHeap : heap_cmds (erased heap)
 
-(** The representation: the two-channel free monad of this development,
-    with the guards summed on the first channel (the carrier of gdm). *)
-let mst_repr (a:Type) = free (cmd_sum guard_cmd mst_cmds) heap_cmds a
+(** The representation: the two-channel free monad of this development. *)
+let mst_repr (a:Type) = free mst_cmds heap_cmds a
 
 let state_wp a = (a -> heap -> Type0) -> (heap -> Type0)
 
@@ -78,10 +76,6 @@ let state_wp_stronger (wp1 wp2:state_wp 'a) : Type0 =
 
 (** State-based WPs of the commands (as in MST.Repr), with witness/recall
     parameterized by `witnessed`. *)
-
-unfold
-let partial_call_wp (pre:pure_pre) : state_wp (squash pre) =
-  fun p h0 -> pre /\ p () h0
 
 unfold
 let read_wp (#a:Type) (#rel:preorder a) (r:mref a rel) : state_wp a =
@@ -116,18 +110,17 @@ unfold
 let get_heap_wp : state_wp (erased heap) =
   fun p h0 -> p (hide h0) h0
 
-(** State-based WP of a first-channel command (guards + mst_cmds).
+(** State-based WP of a first-channel command.
     (Note: destructing the command inside a `Call1` pattern trips universe
     inference, so the dispatch lives in a helper where `r` is a regular
     binder, like in MIO.satisfies.) *)
-let cmd_st_wp (witnessed:heap_predicate_stable -> Type0) (#r:Type0) (op:cmd_sum guard_cmd mst_cmds r) : state_wp r =
+let cmd_st_wp (witnessed:heap_predicate_stable -> Type0) (#r:Type0) (op:mst_cmds r) : state_wp r =
   match op with
-  | CmdL (GCmd pre)               -> partial_call_wp pre
-  | CmdR (CRead #b #rel ref)      -> read_wp ref
-  | CmdR (CWrite #b #rel ref v)   -> write_wp ref v
-  | CmdR (CAlloc #b #rel init)    -> alloc_wp #b #rel init
-  | CmdR (CWitness pred)          -> witness_wp witnessed pred
-  | CmdR (CRecall pred)           -> recall_wp witnessed pred
+  | CRead #b #rel ref      -> read_wp ref
+  | CWrite #b #rel ref v   -> write_wp ref v
+  | CAlloc #b #rel init    -> alloc_wp #b #rel init
+  | CWitness pred          -> witness_wp witnessed pred
+  | CRecall pred           -> recall_wp witnessed pred
 
 (** State-based WP of a second-channel command (get_heap). *)
 let heap_cmd_st_wp (#r:Type u#1) (op:heap_cmds r) : state_wp r =
@@ -147,9 +140,9 @@ let rec witnessed_before #a (preds:S.set heap_predicate_stable) (m:mst_repr a) :
   | Return _ -> True
   | Call1 _ op k ->
     (match op with
-     | CmdR (CWitness pred) -> (S.union preds (S.singleton pred)) `witnessed_before` (k ())
-     | CmdR (CRecall pred)  -> pred `S.mem` preds /\ preds `witnessed_before` (k ())
-     | _                    -> forall x. preds `witnessed_before` (k x))
+     | CWitness pred -> (S.union preds (S.singleton pred)) `witnessed_before` (k ())
+     | CRecall pred  -> pred `S.mem` preds /\ preds `witnessed_before` (k ())
+     | _             -> forall x. preds `witnessed_before` (k x))
   | Call2 _ _ k -> forall x. preds `witnessed_before` (k x)
 
 type heap_w_preds =
@@ -170,13 +163,11 @@ let rec run_mst_with_preds #a
   | Return v -> (v, h0)
   | Call1 _ op k ->
     (match op with
-     | CmdL (GCmd pre) ->
-         run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post h0
-     | CmdR (CRead #b #rel r) ->
+     | CRead #b #rel r ->
          lemma_sel_equals_sel_tot_for_contained_refs (fst h0) r;
          let v = sel_tot (fst h0) r in
          run_mst_with_preds (theta witnessed_trivial (k v)) (k v) post h0
-     | CmdR (CWrite #b #rel r v) ->
+     | CWrite #b #rel r v ->
          lemma_upd_equals_upd_tot_for_contained_refs (fst h0) r v;
          introduce forall (a':Type0) (rel':preorder a') (r':mref a' rel'). fst h0 `contains` r' ==>
            (upd (fst h0) r v `contains` r' /\ rel' (sel (fst h0) r') (sel (upd (fst h0) r v) r')) with
@@ -189,17 +180,17 @@ let rec run_mst_with_preds #a
          end;
          assert (fst h0 `heap_rel` upd (fst h0) r v);
          run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post (upd_tot (fst h0) r v, snd h0)
-     | CmdR (CAlloc #b #rel init) ->
+     | CAlloc #b #rel init ->
          let (r, h) = alloc rel (fst h0) init false in
          lemma_upd_equals_upd_tot_for_contained_refs h r init;
          assert (fst h0 `heap_rel` upd (fst h0) r init);
          lemma_alloc rel (fst h0) init false;
          lemma_next_addr_alloc rel (fst h0) init false;
          run_mst_with_preds (theta witnessed_trivial (k r)) (k r) post (h, snd h0)
-     | CmdR (CWitness pred) ->
+     | CWitness pred ->
          let hp = S.union (snd h0) (S.singleton pred) in
          run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post (fst h0, hp)
-     | CmdR (CRecall pred) ->
+     | CRecall pred ->
          run_mst_with_preds (theta witnessed_trivial (k ())) (k ()) post h0)
   | Call2 _ op k ->
     (match op with
