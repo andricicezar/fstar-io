@@ -68,7 +68,7 @@ type m_cmds (mst:mstate) : Type0 -> Type0 =
 let mio_cmds (mst:mstate) : Type0 -> Type u#1 = cmd_sum io_cmds (m_cmds mst)
 
 // THE MIO FREE MONAD
-type mio (mst:mstate) (a:Type) = free (mio_cmds mst) (empty_cmds u#0 u#0) a
+type mio (mst:mstate) (a:Type) = free (mio_cmds mst) empty_cmds a
 
 let mio_return #mst (x:'a) : mio mst 'a =
   free_return x
@@ -135,7 +135,7 @@ open GuardedDMFree
     signature. **)
 
 let mio_dm (mst:mstate) (a:Type) (wp:hist #io_event a) : Type =
-  gdm (mio_cmds mst) (empty_cmds u#0 u#0) io_event mio_cwp empty_cmd_wp a wp
+  gdm (mio_cmds mst) empty_cmds io_event mio_cwp empty_cmd_wp a wp
 
 let mio_dm_return (mst:mstate) #a (x:a) : mio_dm mst a (hist_return #a #io_event x) =
   gdm_return mio_cwp empty_cmd_wp x

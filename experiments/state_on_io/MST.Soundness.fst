@@ -59,11 +59,11 @@ type mst_cmds : Type0 -> Type u#1 =
 
 (** The representation: the two-channel free monad of this development,
     with the second channel unused. *)
-let mst_repr (a:Type) = free mst_cmds (empty_cmds u#0 u#0) a
+let mst_repr (a:Type) = free mst_cmds empty_cmds a
 
 (** Eliminates an impossible second-channel command. *)
-let empty_elim (#r:Type0) (#a:Type) (op:empty_cmds u#0 u#0 r) : a =
-  allow_inversion (empty_cmds u#0 u#0 r);
+let empty_elim (#r:Type0) (#a:Type) (op:empty_cmds r) : a =
+  allow_inversion (empty_cmds r);
   false_elim ()
 
 let state_wp a = (a -> heap -> Type0) -> (heap -> Type0)

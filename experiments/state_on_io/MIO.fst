@@ -18,7 +18,7 @@ open GuardedDMFree
     flag. **)
 
 (** The carrier of mio_dm: mio extended with guard commands. **)
-type gmio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) (empty_cmds u#0 u#0) a
+type gmio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) empty_cmds a
 
 (** **** Flag **)
 noeq

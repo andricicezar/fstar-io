@@ -12,7 +12,7 @@ type cmd_sum (cmd1 cmd2 : Type -> Type) : Type -> Type =
 
 (** The empty command type: instantiates an unused channel. *)
 noeq
-type empty_cmds : Type u#f -> Type u#g =
+type empty_cmds : Type u#0 -> Type u#0 =
 
 (** Sum of two event types.
     Events are plain types parameterizing the hist monad. *)

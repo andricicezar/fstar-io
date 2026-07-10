@@ -25,8 +25,8 @@ let cmd_wp_sum
 
 (** WP for the empty command type (used for an unused channel):
     there is no command to give a WP to. *)
-let empty_cmd_wp (#event:Type u#ev) : cmd_wp (empty_cmds u#f u#g) event =
-  fun c #r op -> allow_inversion (empty_cmds u#f u#g r); false_elim ()
+let empty_cmd_wp (#event:Type) : cmd_wp empty_cmds event =
+  fun c #r op -> allow_inversion (empty_cmds r); false_elim ()
 
 (** Inspired from Kenji Maillard's thesis (2.4.5) **)
 let rec theta #a #cmd1 #cmd2 (#event:Type)
