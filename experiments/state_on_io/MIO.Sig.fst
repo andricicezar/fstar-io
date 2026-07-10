@@ -68,7 +68,7 @@ type m_cmds (mst:mstate) : Type0 -> Type0 =
 let mio_cmds (mst:mstate) : Type0 -> Type u#1 = cmd_sum io_cmds (m_cmds mst)
 
 // THE MIO FREE MONAD
-type mio (mst:mstate) (a:Type) = free (mio_cmds mst) a
+type mio (mst:mstate) (a:Type) = free (mio_cmds mst) (empty_cmds u#0 u#0) a
 
 let mio_return #mst (x:'a) : mio mst 'a =
   free_return x
@@ -127,15 +127,18 @@ unfold let mio_cwp #mst (c:caller) (#r:Type0) (op:mio_cmds mst r) : hist #io_eve
   | CmdR GetST -> forall (s:mst.typ). s `mst.abstracts` h ==> p [] s
   | CmdL iocmd -> io_pre iocmd h /\ (forall (res:r). io_post iocmd res ==> p [convert_call_to_event c iocmd res] res)
 
+open DMFree
 open GuardedDMFree
 
-(** Instantiation of the Dijkstra monad from DMFree with MIO commands/events **)
+(** Instantiation of the Dijkstra monad from DMFree with MIO commands/events.
+    The second command channel is unused: it is instantiated with the empty
+    signature. **)
 
 let mio_dm (mst:mstate) (a:Type) (wp:hist #io_event a) : Type =
-  gdm (mio_cmds mst) io_event mio_cwp a wp
+  gdm (mio_cmds mst) (empty_cmds u#0 u#0) io_event mio_cwp empty_cmd_wp a wp
 
 let mio_dm_return (mst:mstate) #a (x:a) : mio_dm mst a (hist_return #a #io_event x) =
-  gdm_return mio_cwp x
+  gdm_return mio_cwp empty_cmd_wp x
 
 #push-options "--z3rlimit 40"
 let mio_dm_bind (mst:mstate) #a #b
@@ -144,22 +147,22 @@ let mio_dm_bind (mst:mstate) #a #b
   (v : mio_dm mst a wp_v)
   (f : (x:a -> mio_dm mst b (wp_f x))) :
   Tot (mio_dm mst b (hist_bind wp_v wp_f)) =
-  gdm_bind mio_cwp wp_v wp_f v f
+  gdm_bind mio_cwp empty_cmd_wp wp_v wp_f v f
 #pop-options
 
 let mio_dm_subcomp (mst:mstate) #a (wp1 wp2 : hist #io_event a) (f : mio_dm mst a wp1) :
   Pure (mio_dm mst a wp2)
     (requires wp1 ⊑ wp2)
     (ensures fun _ -> True) =
-  gdm_subcomp mio_cwp wp1 wp2 f
+  gdm_subcomp mio_cwp empty_cmd_wp wp1 wp2 f
 
 let mio_dm_if_then_else (mst:mstate) #a
   (wp1 wp2 : hist #io_event a) (f : mio_dm mst a wp1) (g : mio_dm mst a wp2) (b : bool) : Type =
-  gdm_if_then_else mio_cwp wp1 wp2 f g b
+  gdm_if_then_else mio_cwp empty_cmd_wp wp1 wp2 f g b
 
 let mio_dm_guard_return (mst:mstate)
   (pre:pure_pre) : mio_dm mst (squash pre) (guard_wp pre) =
-  gdm_guard mio_cwp pre
+  gdm_guard mio_cwp empty_cmd_wp pre
 
 val mio_dm_lift_pure : mst:mstate -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> mio_dm mst a (wp_lift_pure_hist w)
 let mio_dm_lift_pure (mst:mstate) #a
