@@ -1,13 +1,18 @@
 module MST.Soundness
 
-(** Soundness of the MST Dijkstra monad, in the style of
-    secrefstar/MST.Soundness.fst, but stated on the actual carrier of
-    MST.Repr: the two-channel free monad with guards + mst_cmds on the
-    first channel and heap_cmds (get_heap) on the second.
+(** Soundness of an MST Dijkstra monad, in the style of
+    secrefstar/MST.Soundness.fst.
 
-    Like in secrefstar, theta is defined here parameterized by an abstract
-    `witnessed` predicate-transformer (MST.Repr's WPs fix it to
-    FStar.Monotonic.Witnessed): soundness of witness/recall relies on the
+    Like the original, this file is a standalone model: it does not depend
+    on MST.Repr, but defines its own copies of the MST commands and their
+    state-based WPs. Unlike the original (which also defines its own free
+    monad), the representation here is built from the free monad of this
+    development: the two-channel `Free.free`, with guards + mst_cmds on the
+    first channel and heap_cmds (get_heap) on the second — the carrier
+    shape of GuardedDMFree.gdm.
+
+    theta is defined parameterized by an abstract `witnessed`
+    predicate-transformer: soundness of witness/recall relies on the
     parametricity of programs in `witnessed`. The interpreter instantiates
     it with the trivial instance and maintains instead the set of
     predicates witnessed so far (all of which hold of the current heap, and
@@ -20,7 +25,6 @@ open FStar.Ghost
 
 open Free
 open GuardedDMFree
-open MST.Repr
 
 module S = FStar.TSet
 
@@ -35,7 +39,32 @@ let lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h
   lemma_distinct_addrs_distinct_preorders ();
   lemma_distinct_addrs_distinct_mm ()
 
-(** The carrier of MST.Repr's `mst a wp` (the gdm without its refinement). *)
+let heap_rel (h1:heap) (h2:heap) =
+  forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>
+    (h2 `contains` r /\ rel (sel h1 r) (sel h2 r))
+
+let stable (pred: heap -> Type0) = stable pred heap_rel
+
+type heap_predicate = heap -> Type0
+type heap_predicate_stable = pred:heap_predicate {stable pred}
+
+(** The MST commands (as in MST.Repr). *)
+noeq
+type mst_cmds : Type0 -> Type u#1 =
+| CRead    : #b:Type0 -> #rel:preorder b -> mref b rel -> mst_cmds b
+| CWrite   : #b:Type0 -> #rel:preorder b -> mref b rel -> b -> mst_cmds unit
+| CAlloc   : #b:Type0 -> #rel:preorder b -> b -> mst_cmds (mref b rel)
+| CWitness : heap_predicate_stable -> mst_cmds unit
+| CRecall  : heap_predicate_stable -> mst_cmds unit
+
+(** get_heap: its result (erased heap) lives at universe 1, so it goes on
+    the second channel of the free monad. *)
+noeq
+type heap_cmds : Type u#1 -> Type u#1 =
+| CGetHeap : heap_cmds (erased heap)
+
+(** The representation: the two-channel free monad of this development,
+    with the guards summed on the first channel (the carrier of gdm). *)
 let mst_repr (a:Type) = free (cmd_sum guard_cmd mst_cmds) heap_cmds a
 
 let state_wp a = (a -> heap -> Type0) -> (heap -> Type0)
@@ -47,17 +76,45 @@ let state_wp_bind (m:state_wp 'a) (k:'a -> state_wp 'b) : state_wp 'b =
 let state_wp_stronger (wp1 wp2:state_wp 'a) : Type0 =
   forall p h0. wp2 p h0 ==> wp1 p h0
 
-(** The state-based WPs of the commands are reused from MST.Repr
-    (read_wp, write_wp, alloc_wp, get_heap_wp, guard_st_wp); only
-    witness/recall get local variants parameterized by `witnessed`. *)
+(** State-based WPs of the commands (as in MST.Repr), with witness/recall
+    parameterized by `witnessed`. *)
 
 unfold
-let witness_stwp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_stable) : state_wp unit =
+let partial_call_wp (pre:pure_pre) : state_wp (squash pre) =
+  fun p h0 -> pre /\ p () h0
+
+unfold
+let read_wp (#a:Type) (#rel:preorder a) (r:mref a rel) : state_wp a =
+  fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0
+
+unfold
+let write_wp (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : state_wp unit =
+  fun p h0 ->
+    h0 `contains` r /\ rel (sel h0 r) v /\ p () (upd h0 r v)
+
+let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
+  (addr_of r) `addr_unused_in` h0 /\
+  fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\
+  h1 == upd h0 r init /\ is_mm r == false /\
+  addr_of r == next_addr h0 /\
+  next_addr h1 > next_addr h0
+
+unfold
+let alloc_wp (#a:Type) (#rel:preorder a) (init:a) : state_wp (mref a rel) =
+  fun p h0 ->
+    (forall r. alloc_post init h0 r (upd h0 r init) ==> p r (upd h0 r init))
+
+unfold
+let witness_wp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_stable) : state_wp unit =
   fun p h -> pred h /\ stable pred /\ (witnessed pred ==> p () h)
 
 unfold
-let recall_stwp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_stable) : state_wp unit =
+let recall_wp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_stable) : state_wp unit =
   fun p h -> witnessed pred /\ (pred h ==> p () h)
+
+unfold
+let get_heap_wp : state_wp (erased heap) =
+  fun p h0 -> p (hide h0) h0
 
 (** State-based WP of a first-channel command (guards + mst_cmds).
     (Note: destructing the command inside a `Call1` pattern trips universe
@@ -65,12 +122,12 @@ let recall_stwp (witnessed:heap_predicate_stable -> Type0) (pred:heap_predicate_
     binder, like in MIO.satisfies.) *)
 let cmd_st_wp (witnessed:heap_predicate_stable -> Type0) (#r:Type0) (op:cmd_sum guard_cmd mst_cmds r) : state_wp r =
   match op with
-  | CmdL (GCmd pre)               -> guard_st_wp pre
+  | CmdL (GCmd pre)               -> partial_call_wp pre
   | CmdR (CRead #b #rel ref)      -> read_wp ref
   | CmdR (CWrite #b #rel ref v)   -> write_wp ref v
   | CmdR (CAlloc #b #rel init)    -> alloc_wp #b #rel init
-  | CmdR (CWitness pred)          -> witness_stwp witnessed pred
-  | CmdR (CRecall pred)           -> recall_stwp witnessed pred
+  | CmdR (CWitness pred)          -> witness_wp witnessed pred
+  | CmdR (CRecall pred)           -> recall_wp witnessed pred
 
 (** State-based WP of a second-channel command (get_heap). *)
 let heap_cmd_st_wp (#r:Type u#1) (op:heap_cmds r) : state_wp r =
