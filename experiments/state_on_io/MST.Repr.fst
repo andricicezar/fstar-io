@@ -6,8 +6,10 @@ open FStar.Calc
 open FStar.Preorder
 open FStar.Monotonic.Heap
 open FStar.Ghost
+open FStar.Universe
 
 open Free
+open DMFree
 open GuardedDMFree
 
 module L = FStar.List.Tot.Base
@@ -75,9 +77,19 @@ type mst_cmds : Type0 -> Type u#1 =
 | CAlloc   : #b:Type0 -> #rel:preorder b -> b -> mst_cmds (mref b rel)
 | CWitness : heap_predicate_stable -> mst_cmds unit
 | CRecall  : heap_predicate_stable -> mst_cmds unit
-(* CGetHeap cannot be part of the GADT because erased heap : Type (not Type0).
-   heap lives at universe 1 because it stores values of arbitrary Type0 types.
-   We provide mst_get_heap as an assumed primitive at the DM level instead. *)
+
+(* CGetHeap cannot be part of mst_cmds because erased heap : Type u#1 (not
+   Type0): heap lives at universe 1 because it stores values of arbitrary
+   Type0 types. Thus it gets its own command type, indexed at universe 1.
+   (The u#2 is padding: cmd_sum at index universe 1 lives at u#2, and both
+   its summands must live there too.) *)
+noeq
+type heap_cmds : Type u#1 -> Type u#2 =
+| CGetHeap : heap_cmds (erased heap)
+
+(** Combined MST commands: mst_cmds is lifted to index universe 1
+    (via cmd_downgrade) so that it can be summed with heap_cmds. *)
+let mst_all_cmds : Type u#1 -> Type u#2 = cmd_sum (cmd_downgrade u#1 u#1 mst_cmds) heap_cmds
 
 (** ** END Section 2: MST commands **)
 
@@ -193,6 +205,23 @@ let mst_cwp (_c:caller) (#r:Type0) (op:mst_cmds r) : hist #mst_event r =
     | CRecall pred ->
         witnessed pred /\ (pred h0 ==> p [] ())
 
+(** CGetHeap reads the heap without modifying it: no event is emitted and
+    the current heap (folded from the history) is returned. *)
+unfold
+let heap_cwp (_c:caller) (#r:Type u#1) (op:heap_cmds r) : hist #mst_event r =
+  fun (p : hist_post #mst_event r) (h : list mst_event) ->
+    match op with
+    (* coerce_eq transports the result along r == erased heap (known from
+       inversion of the match); a direct application trips the erased
+       coercion inserted by the elaborator *)
+    | CGetHeap -> p [] (coerce_eq () (hide (current_heap h)))
+
+(** Command WPs for the combined commands: the WPs of the downgraded
+    mst_cmds + the WPs of heap_cmds. *)
+unfold
+let mst_all_cwp : cmd_wp mst_all_cmds mst_event =
+  cmd_wp_sum (cmd_wp_downgrade mst_cwp) heap_cwp
+
 (** Lifting from hist-based WPs to state-based WPs.
     Converts a hist WP over mst_event events to a state-based WP.
     apply_events folds the local trace from h0 to compute the final heap. **)
@@ -221,10 +250,10 @@ let embed_st_to_hist (#a:Type) (wp:st_mwp_h heap a) : hist #mst_event a =
     Internally a dm tree (free monad + theta refinement) whose hist WP
     is the embedding of the state-based WP via embed_st_to_hist. *)
 let mst (a:Type) (wp:st_mwp_h heap a) =
-  gdm mst_cmds mst_event mst_cwp a (embed_st_to_hist wp)
+  gdm mst_all_cmds mst_event mst_all_cwp a (embed_st_to_hist wp)
 
 let mst_return (#a:Type) (x:a) : mst a (st_return x) =
-  gdm_subcomp mst_cwp (hist_return x) (embed_st_to_hist (st_return x)) (gdm_return mst_cwp x)
+  gdm_subcomp mst_all_cwp (hist_return x) (embed_st_to_hist (st_return x)) (gdm_return mst_all_cwp x)
 
 (** embed_st_to_hist is a lax monad morphism: it distributes over bind.
     Proof sketch: unfolding both sides yields wp_v applied to different
@@ -314,8 +343,8 @@ let mst_bind
   let hwp_v = embed_st_to_hist wp_v in
   let hwp_f = fun x -> embed_st_to_hist (wp_f x) in
   lemma_embed_bind_dist wp_v wp_f;
-  gdm_subcomp mst_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
-    (gdm_bind mst_cwp hwp_v hwp_f v f)
+  gdm_subcomp mst_all_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
+    (gdm_bind mst_all_cwp hwp_v hwp_f v f)
 
 let mst_subcomp
   (#a : Type)
@@ -333,21 +362,38 @@ let guard_st_wp (pre:pure_pre) : st_mwp_h heap (squash pre) =
   wp'
 
 let guard_return (pre:pure_pre) : mst (squash pre) (guard_st_wp pre) =
-  gdm_subcomp mst_cwp (guard_wp pre) (embed_st_to_hist (guard_st_wp pre))
-    (gdm_guard mst_cwp pre)
+  gdm_subcomp mst_all_cwp (guard_wp pre) (embed_st_to_hist (guard_st_wp pre))
+    (gdm_guard mst_all_cwp pre)
 
+(** Runs a Type0-resulting command through the downgrade wrapper, hiding the
+    universe raise/downgrade round-trip: the WP is the same as if the command
+    was part of the free monad directly (like gdm_cmd provides). *)
 #push-options "--z3rlimit 40"
+let mst_cmd (c:caller) (#r:Type0) (op:mst_cmds r)
+  : gdm mst_all_cmds mst_event mst_all_cwp r (hist_bind (mst_cwp c op) (fun ri -> hist_return ri)) =
+  let dop : mst_all_cmds (raise_t u#0 u#1 r) = CmdL (CmdDowngrade op) in
+  let wp_v = hist_bind (mst_all_cwp c dop) (fun ri -> hist_return ri) in
+  let wp_f : raise_t u#0 u#1 r -> hist #mst_event r =
+    fun x -> hist_return (downgrade_val x) in
+  let m = gdm_bind mst_all_cwp wp_v wp_f
+            (gdm_cmd mst_all_cwp c dop)
+            (fun x -> gdm_return mst_all_cwp (downgrade_val x)) in
+  gdm_subcomp mst_all_cwp
+    (hist_bind wp_v wp_f)
+    (hist_bind (mst_cwp c op) (fun ri -> hist_return ri))
+    m
+
 let mst_read (#a:Type) (#rel:preorder a) (r:mref a rel) : mst a (read_wp r) =
-  gdm_subcomp mst_cwp
+  gdm_subcomp mst_all_cwp
     (hist_bind (mst_cwp Prog (CRead r)) (fun x -> hist_return x))
     (embed_st_to_hist (read_wp r))
-    (gdm_cmd mst_cwp Prog (CRead r))
+    (mst_cmd Prog (CRead r))
 
 let mst_write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : mst unit (write_wp r v) =
-  gdm_subcomp mst_cwp
+  gdm_subcomp mst_all_cwp
     (hist_bind (mst_cwp Prog (CWrite r v)) (fun x -> hist_return x))
     (embed_st_to_hist (write_wp r v))
-    (gdm_cmd mst_cwp Prog (CWrite r v))
+    (mst_cmd Prog (CWrite r v))
 
 #push-options "--fuel 2"
 let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_event (mref a rel)) (h:list mst_event) :
@@ -360,28 +406,30 @@ let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_eve
 
 let mst_alloc (#a:Type) (#rel:preorder a) (init:a) : mst (mref a rel) (alloc_wp init) =
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_alloc_embed #a #rel init));
-  gdm_subcomp mst_cwp
+  gdm_subcomp mst_all_cwp
     (hist_bind (mst_cwp Prog (CAlloc init)) (fun x -> hist_return x))
     (embed_st_to_hist (alloc_wp init))
-    (gdm_cmd mst_cwp Prog (CAlloc init))
+    (mst_cmd Prog (CAlloc init))
 
 let mst_witness (pred:heap_predicate_stable) : mst unit (witness_wp pred) =
-  gdm_subcomp mst_cwp
+  gdm_subcomp mst_all_cwp
     (hist_bind (mst_cwp Prog (CWitness pred)) (fun x -> hist_return x))
     (embed_st_to_hist (witness_wp pred))
-    (gdm_cmd mst_cwp Prog (CWitness pred))
+    (mst_cmd Prog (CWitness pred))
 
 let mst_recall (pred:heap_predicate_stable) : mst unit (recall_wp pred) =
-  gdm_subcomp mst_cwp
+  gdm_subcomp mst_all_cwp
     (hist_bind (mst_cwp Prog (CRecall pred)) (fun x -> hist_return x))
     (embed_st_to_hist (recall_wp pred))
-    (gdm_cmd mst_cwp Prog (CRecall pred))
-#pop-options
+    (mst_cmd Prog (CRecall pred))
 
-(* CGetHeap returns erased heap : Type (universe 1), which cannot be an index
-   of mst_cmds : Type0 -> Type u#1. This is because F*'s heap stores values of
-   arbitrary Type0, forcing heap itself to universe 1. We assume mst_get_heap
-   as a primitive — its soundness follows from the semantics of get_heap_wp. *)
-assume val mst_get_heap : mst (erased heap) get_heap_wp
+(** CGetHeap's result (erased heap) lives at universe 1, so the command is
+    called directly (no downgrade wrapper needed). *)
+let mst_get_heap : mst (erased heap) get_heap_wp =
+  gdm_subcomp mst_all_cwp
+    (hist_bind (mst_all_cwp Prog (CmdR CGetHeap)) (fun x -> hist_return x))
+    (embed_st_to_hist get_heap_wp)
+    (gdm_cmd mst_all_cwp Prog (CmdR CGetHeap))
+#pop-options
 
 (** ** END Section 4: Dijkstra Monad **)

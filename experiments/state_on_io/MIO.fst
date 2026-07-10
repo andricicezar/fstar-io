@@ -10,13 +10,14 @@ open GuardedDMFree
 (** * The MIO effect indexed by a flag, in the style of sciostar/MIO.fst.
 
     The underlying representation of `mio_dm` is the free monad over
-    `cmd_sum guard_cmd (mio_cmds mst)`: guard commands (GCmd) play the
-    role that `PartialCall` plays in the sciostar representation.
-    Therefore the flag predicate `satisfies` is defined on this guarded
-    carrier and always allows guard commands, no matter the flag. **)
+    `cmd_sum (cmd_downgrade guard_cmd) (mio_cmds mst)`: guard commands
+    (GCmd) play the role that `PartialCall` plays in the sciostar
+    representation. Therefore the flag predicate `satisfies` is defined on
+    this guarded carrier and always allows guard commands, no matter the
+    flag. **)
 
 (** The carrier of mio_dm: mio extended with guard commands. **)
-type gmio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) a
+type gmio (mst:mstate) (a:Type) = free (cmd_sum (cmd_downgrade guard_cmd) (mio_cmds mst)) a
 
 (** **** Flag **)
 noeq
@@ -27,7 +28,7 @@ type tflag = | NoOps | GetMStateOps | IOOps | AllOps
     (Note: destructing the command inside a `Call` pattern of `satisfies`
     trips universe inference, so the dispatch lives in this helper where
     `r` is a regular binder.) **)
-let allows #mst (flag:tflag) (#r:Type0) (op:cmd_sum guard_cmd (mio_cmds mst) r) : Type0 =
+let allows #mst (flag:tflag) (#r:Type0) (op:cmd_sum (cmd_downgrade guard_cmd) (mio_cmds mst) r) : Type0 =
   match op with
   | CmdL _        -> True
   | CmdR (CmdL _) -> (match flag with | AllOps | IOOps -> True | _ -> False)
@@ -63,7 +64,7 @@ let (≼) (flag1:tflag) (flag2:tflag) : Type0 =
 let plus_compat_le (f1 f2 : tflag) : Lemma (f1 ≼ (f1⊕f2)) = ()
 let plus_comm      (f1 f2 : tflag) : Lemma (f1⊕f2 == f2⊕f1) = ()
 
-let allows_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (#r:Type0) (op:cmd_sum guard_cmd (mio_cmds mst) r) :
+let allows_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (#r:Type0) (op:cmd_sum (cmd_downgrade guard_cmd) (mio_cmds mst) r) :
   Lemma (allows f1 op ==> allows f2 op) = ()
 
 let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : gmio mst 'a) :
@@ -111,7 +112,7 @@ type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist #io_event a) =
   t:(mio_dm mst a wp){t `satisfies` flag}
 
 let dm_gmio_theta #mst #a (m:gmio mst a) : hist #io_event a =
-  theta (cmd_wp_sum guard_cmd_wp mio_cwp) m
+  theta (cmd_wp_sum (cmd_wp_downgrade guard_cmd_wp) mio_cwp) m
 
 let dm_gmio_return (a:Type) (x:a) (mst:mstate) : dm_gmio a mst NoOps (hist_return x) by (compute ()) =
   mio_dm_return mst x
@@ -176,7 +177,8 @@ let dm_gmio_guard_return
 
 (** Note: like in GuardedDMFree.lift_pure_gdm, the subcomp query here is
     sensitive to quantifier instantiation; it only goes through when split
-    off from the rest of the VC, with ifuel 2. **)
+    off from the rest of the VC, with ifuel 2 and the WP inclusion asserted
+    explicitly. **)
 #push-options "--z3rlimit 40 --ifuel 2 --split_queries always"
 val lift_pure_dm_gmio :
   a: Type u#a ->
@@ -193,6 +195,7 @@ let lift_pure_dm_gmio a mst w f =
     let r = f () in
     dm_gmio_return a r mst in
   let m = dm_gmio_bind _ a mst NoOps (guard_wp #io_event (as_requires w)) NoOps (fun _ -> wp_lift_pure_hist w) lhs rhs in
+  assert (hist_bind (guard_wp #io_event (as_requires w)) (fun _ -> wp_lift_pure_hist w) ⊑ wp_lift_pure_hist #a #io_event w);
   dm_gmio_subcomp a mst NoOps _ NoOps _ m
 #pop-options
 

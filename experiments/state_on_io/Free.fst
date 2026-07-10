@@ -7,6 +7,15 @@ type cmd_sum (cmd1 cmd2 : Type -> Type) : Type -> Type =
 | CmdL : #r:Type -> cmd1 r -> cmd_sum cmd1 cmd2 r
 | CmdR : #r:Type -> cmd2 r -> cmd_sum cmd1 cmd2 r
 
+(** Lifts a Type0-indexed command type to an arbitrary index universe:
+    the result-type index is raised with FStar.Universe.raise_t and the
+    interpreter has to downgrade the result before passing it to the
+    continuation. This allows summing (via cmd_sum) command types whose
+    result types live in different universes. *)
+noeq
+type cmd_downgrade (cmd : Type u#0 -> Type u#e) : Type u#a -> Type u#(max (1 + a) e) =
+| CmdDowngrade : #r:Type u#0 -> cmd r -> cmd_downgrade cmd (FStar.Universe.raise_t u#0 u#a r)
+
 (** Sum of two event types.
     Events are plain types parameterizing the hist monad. *)
 noeq

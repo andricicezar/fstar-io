@@ -24,12 +24,15 @@ let guard_cmd_wp (#event:Type) (_:caller) (#r:Type0) (cmd:guard_cmd r) : hist #e
 let guard_wp (#event:Type) (pre:pure_pre) : hist #event (squash pre) =
   guard_cmd_wp #event Prog (GCmd pre)
 
+(** The guard commands are Type0-indexed; to allow client command types
+    whose result types live in a higher universe, they are summed with the
+    universe-lifted (downgraded) guard commands. *)
 // The Dijkstra Monad
 type gdm (cmd:Type -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
-  (m:(free (cmd_sum guard_cmd cmd) a){theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp})
+  (m:(free (cmd_sum (cmd_downgrade guard_cmd) cmd) a){theta (cmd_wp_sum (cmd_wp_downgrade guard_cmd_wp) cwp) m ⊑ wp})
 
 let gdm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : gdm cmd event cwp a (hist_return #a #event x) =
-  dm_return (cmd_wp_sum guard_cmd_wp cwp) x
+  dm_return (cmd_wp_sum (cmd_wp_downgrade guard_cmd_wp) cwp) x
 
 let gdm_cmd #cmd (#event:Type) (cwp:cmd_wp cmd event) (c:caller) #r (op:cmd r) :
   gdm cmd event cwp r (hist_bind (cwp c op) (fun ri -> hist_return ri)) =
@@ -43,7 +46,7 @@ let gdm_bind
   (v : gdm cmd event cwp a wp_v)
   (f : (x:a -> gdm cmd event cwp b (wp_f x))) :
   Tot (gdm cmd event cwp b (hist_bind wp_v wp_f)) =
-  dm_bind (cmd_wp_sum guard_cmd_wp cwp) wp_v wp_f v f
+  dm_bind (cmd_wp_sum (cmd_wp_downgrade guard_cmd_wp) cwp) wp_v wp_f v f
 
 let gdm_subcomp #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (wp1 wp2: hist #event a) (f : gdm cmd event cwp a wp1) :
   Pure (gdm cmd event cwp a wp2)
@@ -58,8 +61,9 @@ let gdm_if_then_else #cmd (#event:Type) (cwp:cmd_wp cmd event) #a
 let gdm_guard
   #cmd (#event:Type) (cwp:cmd_wp cmd event)
   (pre:pure_pre) : gdm cmd event cwp (squash pre) (guard_wp #event pre) =
-  let m = Call Prog (CmdL (GCmd pre)) (Return) in
-  assert (theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ (guard_wp #event pre));
+  let m = Call Prog (CmdL (CmdDowngrade (GCmd pre)))
+            (fun x -> Return (FStar.Universe.downgrade_val x)) in
+  assert (theta (cmd_wp_sum (cmd_wp_downgrade guard_cmd_wp) cwp) m ⊑ (guard_wp #event pre));
   m
 
 (** Note: the subcomp query (query 6 under --split_queries always) is a

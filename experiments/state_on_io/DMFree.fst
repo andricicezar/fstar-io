@@ -23,6 +23,21 @@ let cmd_wp_sum
     | CmdL op1 -> cwp1 c op1
     | CmdR op2 -> cwp2 c op2
 
+(** WP for a downgraded command: run the base command's WP and raise the
+    result before passing it to the postcondition. *)
+let cmd_wp_downgrade
+  (#cmd:Type u#0 -> Type u#e)
+  (#event:Type u#ev)
+  (cwp:cmd_wp cmd event)
+  : cmd_wp (cmd_downgrade u#e u#a cmd) event =
+  fun c #r op ->
+    match op with
+    | CmdDowngrade op0 ->
+      let wp' : hist0 #event r =
+        fun p h -> cwp c op0 (fun lt x -> p lt (FStar.Universe.raise_val u#0 u#a x)) h in
+      assert (hist_wp_monotonic wp');
+      wp'
+
 (** Inspired from Kenji Maillard's thesis (2.4.5) **)
 let rec theta #a #cmd (#event:Type) (cwp:cmd_wp cmd event) (m:free cmd a) : Tot (hist #event a) (decreases m) =
   match m with
@@ -97,7 +112,7 @@ let rec lemma_theta_is_lax_morphism_bind #a #b #cmd (#event:Type) (cwp:cmd_wp cm
     }
 
 // The Dijkstra Monad
-type dm (cmd:Type0 -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
+type dm (cmd:Type -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
   (m:(free cmd a){theta cwp m ⊑ wp})
 
 let dm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : dm cmd event cwp a (hist_return #a #event x) =
