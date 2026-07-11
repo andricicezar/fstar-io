@@ -15,7 +15,7 @@ let st_post' = st_post_h' heap
 let st_post  = st_post_h  heap
 let st_wp    = st_mwp_h   heap
 
-val mheap : (a:Type u#a) -> st_wp a -> Type u#(max 1 a)
+val mheap : (a:Type u#a) -> st_wp a -> Type u#(max 2 a)
 let mheap a w = mst a w
 
 val mheap_bind :
@@ -69,21 +69,31 @@ effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
 effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
 
 unfold
-let wp_lift_pure_st (w : pure_wp 'a) : st_wp 'a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun p h -> w (fun r -> p r h)
+let wp_lift_pure_st (#a:Type u#a) (w : pure_wp a) : st_wp a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
+  let wp' : st_wp_h heap a = fun p h -> w (fun r -> p r h) in
+  assert (st_wp_monotonic heap wp');
+  wp'
 
+(** Note: like the corresponding lift in sciostar/state_on_io, the subcomp
+    query here is sensitive to quantifier instantiation; it needs the WP
+    inclusion asserted explicitly. **)
+#push-options "--z3rlimit 40 --ifuel 2 --split_queries always"
 val lift_pure_mst :
   a: Type u#a ->
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (mheap a (wp_lift_pure_st w))
 let lift_pure_mst a w f =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   let lhs = partial_return (as_requires w) in
-  let rhs = (fun (pre:(squash (as_requires w))) -> mheap_return a (f pre)) in
+  let rhs (_:squash (as_requires w)) : mheap a (wp_lift_pure_st w) =
+    let r = f () in
+    mheap_return a r in
   let m = mheap_bind _ _ _ _ lhs rhs in
+  assert (st_bind_wp heap _ a (partial_call_wp (as_requires w)) (fun _ -> wp_lift_pure_st w) ⊑ wp_lift_pure_st w);
   mheap_subcomp _ _ _ m
+#pop-options
 
 sub_effect PURE ~> STATEwp = lift_pure_mst
 

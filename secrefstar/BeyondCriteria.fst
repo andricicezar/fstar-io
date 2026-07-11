@@ -66,6 +66,55 @@ let rrhc (comp:compiler) : Type0 =
         forall (ps:comp.source.pprog i).
           comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
 
+(* RrHC with a fixed backtranslation as the witness (ported from sciostar). *)
+let rrhc_bt
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  : Type0 =
+  forall (i:comp.source.interface).
+    forall (ps:comp.source.pprog i).
+      forall (ct:comp.target.ctx (comp.comp_int i)).
+        comp.source.beh (ps `comp.source.link #i` (bt ct)) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+
+let rrhc_bt_rrhc
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  : Lemma
+    (requires (rrhc_bt comp bt))
+    (ensures (rrhc comp)) =
+  introduce forall (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)).
+      exists (cs:comp.source.ctx i).
+        forall (ps:comp.source.pprog i).
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+  with begin
+    introduce exists (cs:comp.source.ctx i).
+      (forall (ps:comp.source.pprog i).
+        comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
+    with (bt #i ct) and begin
+      ()
+    end
+  end;
+  assert (rrhc comp) by (norm [delta_only [`%rrhc]]; assumption ())
+
+(* Introduction lemma for `rrhc`: it is enough to exhibit a backtranslation
+   and a proof that it validates the RrHC statement pointwise. Defined here,
+   next to `rrhc` and `rrhc_bt`, so that all the involved formulas are
+   elaborated in a single place (newer F* versions do not always relate the
+   formulas arising from different elaboration sites). Ported from sciostar. *)
+let rrhc_intro
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  (pf:(i:comp.source.interface -> ct:comp.target.ctx (comp.comp_int i) -> ps:comp.source.pprog i ->
+       Lemma (comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_sem`
+              comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))))
+  : Lemma (rrhc comp) =
+  introduce forall (i:comp.source.interface) (ps:comp.source.pprog i) (ct:comp.target.ctx (comp.comp_int i)).
+      comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_sem`
+      comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+  with (pf i ct ps);
+  assert (rrhc_bt comp bt) by (norm [delta_only [`%rrhc_bt]]; assumption ());
+  rrhc_bt_rrhc comp bt
+
 let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):comp.tgt_sem -> comp.src_sem -> Type0): Type0 =
   forall (i:comp.source.interface).
     forall (cs:comp.source.ctx i).

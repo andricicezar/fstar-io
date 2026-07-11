@@ -124,12 +124,15 @@ type spec : Type u#(max (1 + a) (1 + b)) =
     (post:(x:argt -> h0:heap -> st_post' (if err then resexn rett else rett) (pre x h0))) ->
     spec
 
+(* The non-ground level is the universe of the effectful arrows: it went up
+   from u#1 to u#2 together with the universe of the state monad's carrier
+   (lib's two-channel free monad). *)
 noeq
-type uspec = 
-| U00 : v:spec u#0 u#0 -> uspec 
-| U01 : v:spec u#0 u#1 -> uspec
-| U10 : v:spec u#1 u#0 -> uspec
-| U11 : v:spec u#1 u#1 -> uspec
+type uspec =
+| U00 : v:spec u#0 u#0 -> uspec
+| U01 : v:spec u#0 u#2 -> uspec
+| U10 : v:spec u#2 u#0 -> uspec
+| U11 : v:spec u#2 u#2 -> uspec
 
 type pre_c_post a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
   x:a -> r:b -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)

@@ -139,6 +139,7 @@ instance exportable_refinement a3p t st {| c:exportable_from a3p t st |} (p:t->T
   lemma_export_preserves_prref = (fun x -> c.lemma_export_preserves_prref x);
 }
 
+#push-options "--z3rlimit 40"
 let mk_export_arrow_err a3p
   (t1:Type) st1 {| c1:importable_to a3p t1 st1 |}
   (t2:Type) st2 {| c2:exportable_from a3p t2 st2 |}
@@ -160,6 +161,7 @@ let mk_export_arrow_err a3p
         (exportable_resexn a3p t2 st2).export (EmptyNode rhs Leaf) res
       end
     end
+#pop-options
 
 instance exportable_arrow_err00 a3p
   (t1:Type u#0) st1 {| c1:importable_to a3p t1 st1 |}
@@ -174,7 +176,7 @@ instance exportable_arrow_err00 a3p
     (fun _ _ -> ())
 
 instance exportable_arrow_err10 a3p
-  (t1:Type u#1) st1 {| c1:importable_to a3p t1 st1 |}
+  (t1:Type u#2) st1 {| c1:importable_to a3p t1 st1 |}
   (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
@@ -187,7 +189,7 @@ instance exportable_arrow_err10 a3p
 
 instance exportable_arrow_err01 a3p
   (t1:Type u#0) st1 {| c1:importable_to a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (t2:Type u#2) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U01 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -198,8 +200,8 @@ instance exportable_arrow_err01 a3p
     (fun _ _ -> ())
 
 instance exportable_arrow_err11 a3p
-  (t1:Type u#1) st1 {| c1:importable_to a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (t1:Type u#2) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type u#2) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U11 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -240,7 +242,7 @@ instance exportable_arrow00 a3p
 
 instance exportable_arrow01 a3p
   (t1:Type u#0) st1 {| c1:safe_importable_to a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (t2:Type u#2) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U01 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -252,7 +254,7 @@ instance exportable_arrow01 a3p
     (fun _ _ -> ())
 
 instance exportable_arrow10 a3p
-  (t1:Type u#1) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t1:Type u#2) st1 {| c1:safe_importable_to a3p t1 st1 |}
   (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
@@ -265,8 +267,8 @@ instance exportable_arrow10 a3p
     (fun _ _ -> ())
 
 instance exportable_arrow11 a3p
-  (t1:Type u#1) st1 {| c1:safe_importable_to a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (t1:Type u#2) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type u#2) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U11 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -445,7 +447,7 @@ instance safe_importable_arrow_err00 a3p
 
 instance safe_importable_arrow_err01 a3p
   (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:importable_to a3p t2 st2 |}
+  (t2:Type u#2) st2 {| c2:importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U01 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -456,7 +458,7 @@ instance safe_importable_arrow_err01 a3p
     (fun _ _ -> ())
 
 instance safe_importable_arrow_err10 a3p
-  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t1:Type u#2) st1 {| c1:exportable_from a3p t1 st1 |}
   (t2:Type u#0) st2 {| c2:importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
@@ -468,8 +470,8 @@ instance safe_importable_arrow_err10 a3p
     (fun _ _ -> ())
 
 instance safe_importable_arrow_err11 a3p
-  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:importable_to a3p t2 st2 |}
+  (t1:Type u#2) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#2) st2 {| c2:importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U11 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -495,6 +497,7 @@ let mk_safe_import_arrow a3p
     c2.lemma_safe_import_preserves_prref res rhs;
     fres
 
+#push-options "--z3rlimit 40 --ifuel 2"
 instance safe_importable_arrow00 a3p
   (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
   (t2:Type u#0) st2 {| c2:safe_importable_to a3p t2 st2 |}
@@ -510,7 +513,7 @@ instance safe_importable_arrow00 a3p
 
 instance safe_importable_arrow01 a3p
   (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:safe_importable_to a3p t2 st2 |}
+  (t2:Type u#2) st2 {| c2:safe_importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U01 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -522,7 +525,7 @@ instance safe_importable_arrow01 a3p
     (fun _ _ -> ())
 
 instance safe_importable_arrow10 a3p
-  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t1:Type u#2) st1 {| c1:exportable_from a3p t1 st1 |}
   (t2:Type u#0) st2 {| c2:safe_importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
@@ -535,8 +538,8 @@ instance safe_importable_arrow10 a3p
     (fun _ _ -> ())
 
 instance safe_importable_arrow11 a3p
-  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#1) st2 {| c2:safe_importable_to a3p t2 st2 |}
+  (t1:Type u#2) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#2) st2 {| c2:safe_importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U11 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
@@ -546,3 +549,4 @@ instance safe_importable_arrow11 a3p
     (fun (Node (| _, U11hoc s |) lhs rhs) ->
       mk_safe_import_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
     (fun _ _ -> ())
+#pop-options

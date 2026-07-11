@@ -40,8 +40,16 @@ type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> LR int (fun h0
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
   (| i.psi, fun () -> p c <: LR int (fun _ -> True) i.psi|)
 
+(* The behavior of a whole program, at the type of target whole programs
+   (the computation of a source whole program has this type too, by
+   subsumption). The reify happens in this single place, so the behaviors
+   of the source and target whole programs are related by congruence
+   (as in sciostar). *)
+val beh_whole1 : (unit -> LR int (fun _ -> True) (fun _ _ _ -> True)) -> sem_state
+let beh_whole1 w = beh_sem (reify (w ()))
+
 val beh_src1 : whole_src1 ^-> sem_state
-let beh_src1 = on_domain whole_src1 (fun ws -> beh_sem (reify ((dsnd ws) ()))) (** what happens with the pre-condition? **)
+let beh_src1 = on_domain whole_src1 (fun ws -> beh_whole1 (dsnd ws)) (** what happens with the pre-condition? **)
 
 let src_language1 : language sem_state = {
   interface = src_interface1;
@@ -79,7 +87,7 @@ let link_tgt1 p c =
   fun () -> p (instantiate_ctx_tgt1 c)
 
 val beh_tgt1 : whole_tgt1 ^-> sem_state
-let beh_tgt1 = on_domain whole_tgt1 (fun wt -> beh_sem (reify (wt ())))
+let beh_tgt1 = on_domain whole_tgt1 (fun wt -> beh_whole1 wt)
 
 let tgt_language1 : language sem_state = {
   interface = tgt_interface1;
@@ -138,14 +146,41 @@ let soundness1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_s
   beh_tgt1 (wt) `subset_of` beh_src1 (ws)
 ) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%compile_whole1;`%beh_tgt1;`%beh_src1];iota]) = ()
 
-val comp1_rrhc : unit -> Lemma (rrhc comp1)
-let comp1_rrhc () : Lemma (rrhc comp1) =
-  assert (rrhc comp1) by (
-    norm [delta_only [`%rrhc]];
-    let i = forall_intro () in
-    let ct = forall_intro () in
-    FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
-    compute ())
+(* The behavior of a compiled whole program is the behavior of the source
+   whole program: both sides reduce to the same beh_whole1 application
+   (as in sciostar). *)
+let beh_compile_whole1 (ws:whole_src1) : Lemma (beh_tgt1 (compile_whole1 ws) == beh_src1 ws) =
+  let (| psi, f |) = ws in ()
+
+(* Pointwise RrHC statement: with the backtranslated context as the source
+   context, the behaviors of the source and target whole programs are
+   equal, as a consequence of the syntactic equality of the whole programs
+   (as in sciostar). *)
+let comp1_rrhc_2 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
+  let it = comp_int_src_tgt1 i in
+  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
+  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
+  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
+  let ws : whole_src1 = (ps `link_src1` cs) in
+  beh_src1 ws == beh_tgt1 wt) =
+  syntactic_equality1 i ct ps;
+  beh_compile_whole1 (ps `link_src1` (backtranslate_ctx1 #i ct))
+
+let comp1_rrhc_1 (i:(comp1 u#a u#b).source.interface) (ct:(comp1 u#a u#b).target.ctx ((comp1 u#a u#b).comp_int i)) (ps:(comp1 u#a u#b).source.pprog i) : Lemma (
+  (comp1 u#a u#b).source.beh (ps `(comp1 u#a u#b).source.link #i` (backtranslate_ctx1 #i ct)) `(comp1 u#a u#b).rel_sem`
+  (comp1 u#a u#b).target.beh ((comp1 u#a u#b).compile_pprog #i ps `(comp1 u#a u#b).target.link #((comp1 u#a u#b).comp_int i)` ct)) =
+  comp1_rrhc_2 i ct ps
+
+(* Note: previously this was discharged with a `compute ()` tactic; with the
+   mst representation on lib's two-channel free monad, the fully normalized
+   goal is too large for the solver, so the proof goes through the syntactic
+   equality of the whole programs instead, as in sciostar. Like there, the
+   universe instantiation of comp1 must be fixed: without the annotations,
+   the universes of the statement and of the proof are generalized
+   separately, and the two never meet. *)
+val comp1_rrhc : unit -> Lemma (rrhc (comp1 u#a u#b))
+let comp1_rrhc () : Lemma (rrhc (comp1 u#a u#b)) =
+  rrhc_intro (comp1 u#a u#b) backtranslate_ctx1 comp1_rrhc_1
 
 noeq
 type src_interface2 = {
@@ -165,8 +200,12 @@ type whole_src2 = unit -> LR int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
   fun () -> c p
 
+(* Single reify site for the behaviors of model 2 (cf. beh_whole1). *)
+val beh_whole2 : whole_src2 -> sem_state
+let beh_whole2 w = beh_sem (reify (w ()))
+
 val beh_src2 : whole_src2 ^-> sem_state
-let beh_src2 = on_domain whole_src2 (fun ws -> beh_sem (reify (ws ()))) (** what happens with the pre-condition? **)
+let beh_src2 = on_domain whole_src2 (fun ws -> beh_whole2 ws) (** what happens with the pre-condition? **)
 
 let src_language2 : language sem_state = {
   interface = src_interface2;
@@ -200,7 +239,7 @@ let link_tgt2 p c =
     c tl_read tl_write tl_alloc p
 
 val beh_tgt2 : whole_tgt2 ^-> sem_state
-let beh_tgt2 = on_domain whole_tgt2 (fun wt -> beh_sem (reify (wt ())))
+let beh_tgt2 = on_domain whole_tgt2 (fun wt -> beh_whole2 wt)
 
 let tgt_language2 : language sem_state = {
   interface = tgt_interface2;
@@ -256,11 +295,28 @@ let soundness2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (ps:prog_s
 ) by (norm[delta_only [`%link_tgt2;`%link_src2;`%backtranslate_ctx2;`%compile_pprog2;`%compile_whole2;`%beh_tgt2;`%beh_src2];iota]) = ()
 
 
-val comp2_rrhc : unit -> Lemma (rrhc comp2)
-let comp2_rrhc () : Lemma (rrhc comp2) =
-  assert (rrhc comp2) by (
-    norm [delta_only [`%rrhc]];
-    let i = forall_intro () in
-    let ct = forall_intro () in
-    FStar.Tactics.witness (`(backtranslate_ctx2 #(`#i) (`#ct)));
-    compute ())
+(* The behavior of a compiled whole program is the behavior of the source
+   whole program (as in sciostar). *)
+let beh_compile_whole2 (ws:whole_src2) : Lemma (beh_tgt2 (compile_whole2 ws) == beh_src2 ws) = ()
+
+(* Pointwise RrHC statement (cf. comp1_rrhc_2). *)
+let comp2_rrhc_2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (ps:prog_src2 i) : Lemma (
+  let it = comp_int_src_tgt2 i in
+  let cs : ctx_src2 i = backtranslate_ctx2 #i ct in
+  let pt : prog_tgt2 it = (compile_pprog2 #i ps) in
+  let wt : whole_tgt2 = (pt `link_tgt2` ct) in
+  let ws : whole_src2 = (ps `link_src2` cs) in
+  beh_src2 ws == beh_tgt2 wt) =
+  syntactic_equality2 i ct ps;
+  beh_compile_whole2 (ps `link_src2` (backtranslate_ctx2 #i ct))
+
+let comp2_rrhc_1 (i:(comp2 u#a u#b).source.interface) (ct:(comp2 u#a u#b).target.ctx ((comp2 u#a u#b).comp_int i)) (ps:(comp2 u#a u#b).source.pprog i) : Lemma (
+  (comp2 u#a u#b).source.beh (ps `(comp2 u#a u#b).source.link #i` (backtranslate_ctx2 #i ct)) `(comp2 u#a u#b).rel_sem`
+  (comp2 u#a u#b).target.beh ((comp2 u#a u#b).compile_pprog #i ps `(comp2 u#a u#b).target.link #((comp2 u#a u#b).comp_int i)` ct)) =
+  comp2_rrhc_2 i ct ps
+
+(* Like comp1_rrhc: through the syntactic equality of the whole programs,
+   with the universe instantiation of comp2 fixed. *)
+val comp2_rrhc : unit -> Lemma (rrhc (comp2 u#a u#b))
+let comp2_rrhc () : Lemma (rrhc (comp2 u#a u#b)) =
+  rrhc_intro (comp2 u#a u#b) backtranslate_ctx2 comp2_rrhc_1

@@ -8,6 +8,7 @@ ODIR := $(CACHEDIR)
 FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
+FLAGS += --include ../lib
 FLAGS += $(OTHERFLAGS)
 FLAGS += --warn_error -242 # inner let-rec not encoded, expected
 FLAGS += --warn_error -272 # top-level effects, we use them
@@ -17,6 +18,10 @@ FLAGS += --warn_error -321 # unexpected checked files present, completely spurio
 all: verify
 
 .cache/%.fst.checked: %.fst
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+.cache/%.fst.checked: ../lib/%.fst
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 

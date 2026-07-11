@@ -165,7 +165,7 @@ unfold let post_interm_arrow
 let mk_interm_arrow
   (t1:Type u#a) {| c1 : witnessable t1 |}
   (t2:Type u#b) {| c2 : witnessable t2 |}
- : Type u#(max 1 a b)
+ : Type u#(max 2 a b)
 = x:t1 -> ST t2
     (pre_interm_arrow x)
     (post_interm_arrow)
