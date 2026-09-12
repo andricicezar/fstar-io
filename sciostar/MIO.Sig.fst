@@ -3,12 +3,12 @@ module MIO.Sig
 open FStar.List.Tot.Base
 
 include CommonUtils
-include Free
+include FFree
 include Hist
 open DMFree
 open GuardedDMFree
 
-(** op_sig-style signatures (previously in Free.fst). The free monad from
+(** op_sig-style signatures (previously in FFree.fst). The free monad from
     lib is parameterized by indexed command types, but the signature surface
     of MIO (io_sig, mio_sig) is still expressed with op_sig, so the helpers
     live here now. **)
@@ -123,7 +123,7 @@ let m_sig (mst:mstate): op_sig m_ops = {
 
 let mio_sig (mst:mstate) : op_sig mio_ops = add_sig mio_ops io_sig (m_sig mst)
 
-(** The MIO commands as an indexed command type (in the style of lib.Free):
+(** The MIO commands as an indexed command type (in the style of lib.FFree):
     a single constructor wrapping the op_sig-style signature. **)
 noeq
 type mio_cmds (mst:mstate) : Type0 -> Type0 =
@@ -132,13 +132,13 @@ type mio_cmds (mst:mstate) : Type0 -> Type0 =
 // THE MIO FREE MONAD
 (** Guard commands (GCmd, from lib.GuardedDMFree) are summed into the
     carrier: they play the role the old PartialCall constructor played. **)
-type mio (mst:mstate) (a:Type) = free (cmd_sum guard_cmd (mio_cmds mst)) a
+type mio (mst:mstate) (a:Type) = ffree (cmd_sum guard_cmd (mio_cmds mst)) a
 
 let mio_return #mst (x:'a) : mio mst 'a =
-  free_return x
+  ffree_return x
 
 let mio_bind #mst (#a:Type) (#b:Type) (l:mio mst a) (k:a -> mio mst b) : mio mst b =
-  free_bind l k
+  ffree_bind l k
 
 let convert_call_to_event
   caller

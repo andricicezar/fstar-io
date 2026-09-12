@@ -1,7 +1,7 @@
 open Prims
 open CommonUtils
 open FStar_Pervasives
-open Free
+open FFree
 open MIO_Sig
 
 let print_string2 str =

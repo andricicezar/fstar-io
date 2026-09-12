@@ -5,7 +5,7 @@ open FStar.List.Tot.Base
 open FStar.Tactics
 
 include Hist
-open Free
+open FFree
 open DMFree
 
 noeq
@@ -26,7 +26,7 @@ let guard_wp (#event:Type) (pre:pure_pre) : hist #event (squash pre) =
 
 // The Dijkstra Monad
 type gdm (cmd:Type -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
-  (m:(free (cmd_sum guard_cmd cmd) a){theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp})
+  (m:(ffree (cmd_sum guard_cmd cmd) a){theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp})
 
 let gdm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : gdm cmd event cwp a (hist_return #a #event x) =
   dm_return (cmd_wp_sum guard_cmd_wp cwp) x

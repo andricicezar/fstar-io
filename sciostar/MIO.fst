@@ -85,17 +85,17 @@ let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : mio mst 'a) :
      ((fun r -> sat_le f1 f2 (k r)) <: r:_ -> Lemma (satisfies (k r) f1 ==> satisfies (k r) f2))
 
 let rec sat_bind #mst (fl:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
-  : Lemma (ensures v `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind v f `satisfies` fl)
+  : Lemma (ensures v `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> ffree_bind v f `satisfies` fl)
           (decreases v)
   =
   match v with
   | Return _ -> ()
   | Call op k ->
     Classical.forall_intro
-     ((fun r -> sat_bind fl (k r) f) <: r:_ -> Lemma ((k r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> free_bind (k r) f `satisfies` fl))
+     ((fun r -> sat_bind fl (k r) f) <: r:_ -> Lemma ((k r) `satisfies` fl /\ (forall x. f x `satisfies` fl) ==> ffree_bind (k r) f `satisfies` fl))
 
 let sat_bind_add #mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
-  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind v f `satisfies` (fl_v ⊕ fl_f))
+  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> ffree_bind v f `satisfies` (fl_v ⊕ fl_f))
   =
   sat_le fl_v (fl_v ⊕ fl_f) v;
   let aux x : Lemma (f x `satisfies` fl_f ==> f x `satisfies` (fl_v ⊕ fl_f)) =
@@ -104,15 +104,15 @@ let sat_bind_add #mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
   Classical.forall_intro aux;
   sat_bind (fl_v ⊕ fl_f) v f
 
-let mio_dm_bind_is_free_bind (mst:mstate) #a #b
+let mio_dm_bind_is_ffree_bind (mst:mstate) #a #b
   (wp_v : hist #event a)
   (wp_f : a -> hist #event b)
   (v : mio_dm mst a wp_v)
   (f : (x:a -> mio_dm mst b (wp_f x)))
-: Lemma (mio_dm_bind mst wp_v wp_f v f == free_bind v f)
+: Lemma (mio_dm_bind mst wp_v wp_f v f == ffree_bind v f)
 =
   let r = mio_dm_bind mst wp_v wp_f v f in
-  assert (r == free_bind v f)
+  assert (r == ffree_bind v f)
 
 (** ** Defining F* Effect **)
 
@@ -140,8 +140,8 @@ val dm_gmio_bind  :
 let dm_gmio_bind a b mst flag_v wp_v flag_f wp_f v f : (dm_gmio b mst (flag_v ⊕ flag_f) (hist_bind wp_v wp_f)) =
   let r = mio_dm_bind mst wp_v wp_f v f in
   sat_bind_add flag_v flag_f v f;
-  mio_dm_bind_is_free_bind mst wp_v wp_f v f;
-  assert (free_bind v f `satisfies` (flag_v ⊕ flag_f));
+  mio_dm_bind_is_ffree_bind mst wp_v wp_f v f;
+  assert (ffree_bind v f `satisfies` (flag_v ⊕ flag_f));
   r
 
 val dm_gmio_subcomp :
