@@ -49,7 +49,7 @@ the web server case study at the end.
 | **Section 6** | |
 | Figure 4 | `Compiler.Model1.fst` |
 | Soundness Theorem | `Compiler.Model1.fst`, definition `soundness` |
-|  Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
+|  Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in [`../lib/BeyondCriteria.fst`](../lib/BeyondCriteria.fst) as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
 | Dual Setting, together with the Soundness-Dual Theorem | `Compiler.Model2.fst` | 
 | Syntactic representation of target contexts | `Compiler.ModelStlc.fst` |
 | **Case study - web server** | in folder `case-studies/webserver` |

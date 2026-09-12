@@ -44,7 +44,7 @@ We list where the definitions and theorems of the paper are.
 | Compilation Model from Figure 7. Soundness and RrHP Theorems. | `comp1` in `Compiler.fst` |
 | Syntactic Equality Law | `syntactic_equality1` in `Compiler.fst` |
 | Soundness Theorem | `soundness1` in `Compiler.fst` |
-| Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.fst` as `comp1_rrhc` |
+| Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in [`../lib/BeyondCriteria.fst`](../lib/BeyondCriteria.fst) as `rrhc` and then it is proved in `Compiler.fst` as `comp1_rrhc` |
 | Dual Setting, together with the Soundness-Dual Theorem | Definitions that end with '2' in `Compiler.fst` |
 | Syntactic representation of target contexts | `Compiler.STLC.fst` |
 | **Section 7. Case study - cooperative multi-threding scheduler** | |

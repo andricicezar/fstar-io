@@ -1,5 +1,9 @@
 module RrHP
 
+(* Opened first so that the later opens win on the names both modules
+   define (e.g. [trace]). *)
+open BeyondCriteria
+
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
@@ -312,3 +316,49 @@ let soundness (i:intS) =
 (* This is exactly the target-to-source direction of RrHP. *)
 let proof_soundness (i:intS) : Lemma (soundness i) =
   proof_rrtp_right i
+
+(** ** SEIO★ as an instance of the shared secure-compilation criteria **)
+
+(* Everything above is phrased directly in terms of [progS], [ctxS], [linkS],
+   ... Here we package those into the [language] and [compiler] records of
+   BeyondCriteria, which SCIO* and SecRef* instantiate as well, and rederive
+   RrHP as the generic [rrhc] criterion. *)
+
+let src_language : language behS_t = {
+  interface = intS;
+  pprog = progS; ctx = ctxS; whole = wholeS;
+  link = linkS;
+  beh = FStar.FunctionalExtensionality.on_domain wholeS behS;
+}
+
+let tgt_language : language behT_t = {
+  interface = intT;
+  pprog = progT; ctx = ctxT; whole = wholeT;
+  link = linkT;
+  beh = FStar.FunctionalExtensionality.on_domain wholeT behT;
+}
+
+let comp : compiler = {
+  src_sem = behS_t;
+  tgt_sem = behT_t;
+
+  source = src_language;
+  target = tgt_language;
+
+  comp_int = comp_int;
+
+  compile_pprog = compile_prog;
+
+  rel_sem = rel_behs;
+}
+
+let comp_rrhc_pointwise
+  (i:comp.source.interface)
+  (ct:comp.target.ctx (comp.comp_int i))
+  (ps:comp.source.pprog i)
+  : Lemma (comp.source.beh (ps `comp.source.link #i` (backtranslate_ctx #i ct)) `comp.rel_sem`
+           comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
+  proof_rrhp_bt i
+
+let comp_rrhc () : Lemma (rrhc comp) =
+  rrhc_intro comp backtranslate_ctx comp_rrhc_pointwise

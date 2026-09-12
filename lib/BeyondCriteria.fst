@@ -1,5 +1,13 @@
 module BeyondCriteria
 
+(** Secure compilation criteria "beyond full abstraction" [Abate et al. 2019],
+    shared by SCIO*, SecRef* and SEIO*.
+
+    A language is parameterized by the type [sem] in which the behavior of a
+    whole program is expressed. SCIO* and SEIO* instantiate it with trace
+    properties (see the trace model below), SecRef* with state-passing
+    semantics, but nothing here depends on that choice. *)
+
 open FStar.Classical.Sugar
 open FStar.Tactics
 open FStar.List.Tot
@@ -48,25 +56,26 @@ Axiom compile_par : forall {i}, (par src i) -> (par tgt (cint i)).
 *)
 
 noeq
-type language = {
+type language (sem:Type u#e) = {
   interface : Type u#a;
   pprog : interface -> Type u#b;
   ctx   : interface -> Type u#c;
   whole : Type u#d;
   link  : #i:interface -> pprog i -> ctx i -> whole;
 
-  event_typ : Type u#e;
-  beh   : whole ^-> trace_property #event_typ;
+  beh   : whole ^-> sem;
 }
 
 noeq
 type compiler = {
-  source : language u#a u#b u#c u#d u#e;
-  target : language u#f u#g u#h u#i u#j;
+  src_sem : Type u#e;
+  tgt_sem : Type u#j;
+  source : language u#e u#a u#b u#c u#d src_sem;
+  target : language u#j u#f u#g u#h u#i tgt_sem;
 
   comp_int   : source.interface -> target.interface;
 
-  rel_traces : trace_property #source.event_typ -> trace_property #target.event_typ -> Type0;
+  rel_sem : src_sem -> tgt_sem -> Type0;
 
   compile_pprog : #i:source.interface -> source.pprog i -> target.pprog (comp_int i);
 }
@@ -83,8 +92,10 @@ let rrhc (comp:compiler) : Type0 =
     forall (ct:comp.target.ctx (comp.comp_int i)).
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
 
+(** The same statement, but with the existential witness fixed to a given
+    backtranslation [bt]. *)
 let rrhc_bt
   (comp:compiler)
   (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
@@ -92,7 +103,7 @@ let rrhc_bt
   forall (i:comp.source.interface).
     forall (ps:comp.source.pprog i).
       forall (ct:comp.target.ctx (comp.comp_int i)).
-        comp.source.beh (ps `comp.source.link #i` (bt ct)) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+        comp.source.beh (ps `comp.source.link #i` (bt ct)) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
 
 let rrhc_bt_rrhc
   (comp:compiler)
@@ -103,11 +114,11 @@ let rrhc_bt_rrhc
   introduce forall (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)).
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
   with begin
     introduce exists (cs:comp.source.ctx i).
       (forall (ps:comp.source.pprog i).
-        comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
+        comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
     with (bt #i ct) and begin
       ()
     end
@@ -123,17 +134,17 @@ let rrhc_intro
   (comp:compiler)
   (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
   (pf:(i:comp.source.interface -> ct:comp.target.ctx (comp.comp_int i) -> ps:comp.source.pprog i ->
-       Lemma (comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_traces`
+       Lemma (comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_sem`
               comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))))
   : Lemma (rrhc comp) =
   introduce forall (i:comp.source.interface) (ps:comp.source.pprog i) (ct:comp.target.ctx (comp.comp_int i)).
-      comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_traces`
+      comp.source.beh (ps `comp.source.link #i` (bt #i ct)) `comp.rel_sem`
       comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
   with (pf i ct ps);
   assert (rrhc_bt comp bt) by (norm [delta_only [`%rrhc_bt]]; assumption ());
   rrhc_bt_rrhc comp bt
 
-let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):trace_property #comp.target.event_typ -> trace_property #comp.source.event_typ -> Type0): Type0 =
+let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):comp.tgt_sem -> comp.src_sem -> Type0): Type0 =
   forall (i:comp.source.interface).
     forall (cs:comp.source.ctx i).
       forall (ps:comp.source.pprog i).

@@ -15,6 +15,7 @@ FLAGS = --cache_checked_modules --cache_dir $(abspath $(CACHEDIR))
 FLAGS += --record_hints --use_hints --hint_dir $(abspath $(BUILD_DIR)/hints)
 FLAGS += --odir $(abspath $(ODIR))
 FLAGS += --include $(abspath $(LAMBDABOX_DIR))
+FLAGS += --include $(abspath ../lib)
 FLAGS += --warn_error -241-247-274-288-321-333
 FLAGS += $(OTHERFLAGS)
 
@@ -102,6 +103,7 @@ EXAMPLE_CHECKED := $(SMALL_EXAMPLES_CHECKED) \
 EXAMPLE_FLAGS = --cache_dir $(abspath $(CACHEDIR))
 EXAMPLE_FLAGS += --odir $(abspath $(ODIR))
 EXAMPLE_FLAGS += --include $(abspath $(LAMBDABOX_DIR))
+EXAMPLE_FLAGS += --include $(abspath ../lib)
 EXAMPLE_FLAGS += --warn_error -241-247-274-288-321-333
 EXAMPLE_FLAGS += $(OTHERFLAGS)
 
@@ -135,7 +137,9 @@ $(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 # already removes user and host names (good!)
 .PHONY: package mcp
 package:
-	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
+	@# BeyondCriteria.fst lives in ../lib, so package the repository root
+	@# and keep the relative layout the Makefile expects.
+	git -C .. archive --prefix fstar-io/ -o seiostar/artifact.tar.gz HEAD seiostar lib
 
 
 FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js

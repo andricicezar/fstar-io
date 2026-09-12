@@ -58,6 +58,7 @@ We list where the definitions and theorems of the paper are.
 | Compilation model | `RrHP.fst` |
 | Theorem 5.2 (compiler correctness) | `RrHP.fst` as `compiler_correctness` (statement) and `proof_compiler_correctness` (proof) |
 | Theorem 5.3 (RrHP) | `RrHP.fst` as `rrhp` (statement) and `proof_rrhp` (proof) |
+| Theorem 5.3 (RrHP), as an instance of the shared criteria | `RrHP.fst` as `comp` (the compiler record of [`../lib/BeyondCriteria.fst`](../lib/BeyondCriteria.fst)) and `comp_rrhc` (proof) |
 | Backtranslation | `Backtranslation.fst` |
 | **Section 7** - Running SEIO* | |
 | Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/LambdaIOToLambdaBox.fst` |

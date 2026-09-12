@@ -50,11 +50,11 @@ let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| mst,  _, ws |) -> beh mst ws)
 
-let src_language : language = {
+let src_language : language (trace_property #event) = {
   interface = src_interface;
   ctx = ctx_src; pprog = prog_src; whole = whole_src;
   link = link_src;
-  event_typ = event;  beh = beh_src;
+  beh = beh_src;
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
@@ -67,11 +67,11 @@ let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
 
-let tgt_language : language = {
+let tgt_language : language (trace_property #event) = {
   interface = tgt_interface;
   ctx = ctx_tgt; pprog = prog_tgt; whole = whole_tgt;
   link = link_tgt;
-  event_typ = event; beh = beh_tgt;
+  beh = beh_tgt;
 }
 
 (** ** Compile interfaces **)
@@ -121,6 +121,9 @@ let compile_pprog #i p_s =
 //       LawImportableExportable.fst **)
 
 let comp : compiler = {
+  src_sem = trace_property #event;
+  tgt_sem = trace_property #event;
+
   source = src_language;
   target = tgt_language;
 
@@ -128,7 +131,7 @@ let comp : compiler = {
 
   compile_pprog = compile_pprog;
 
-  rel_traces = (==);
+  rel_sem = (==);
 }
 
 (** ** RrHC **)
@@ -171,21 +174,21 @@ let comp_rrhc_2 (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src
 
 let comp_rrhc_1 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) (ps:comp.source.pprog i) : Lemma (
   let cs : comp.source.ctx i = backtranslate_ctx #i ct in
-  comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
+  comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
   comp_rrhc_2 i ct ps
 
 let comp_rrhc_0 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) : Lemma (
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
  introduce exists (cs:comp.source.ctx i).
         (forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_sem` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
   with (backtranslate_ctx #i ct)
   and Classical.forall_intro (comp_rrhc_1 i ct)
 
 let comp_rrhc_1' (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) (ps:comp.source.pprog i) : Lemma (
-  comp.source.beh (ps `comp.source.link #i` (backtranslate_ctx #i ct)) `comp.rel_traces`
+  comp.source.beh (ps `comp.source.link #i` (backtranslate_ctx #i ct)) `comp.rel_sem`
   comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
   comp_rrhc_1 i ct ps
 

@@ -9,6 +9,7 @@ FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += $(OTHERFLAGS)
+FLAGS += --include ../lib
 FLAGS += --warn_error -242 # inner let-rec not encoded, expected
 FLAGS += --warn_error -272 # top-level effects, we use them
 FLAGS += --warn_error -274 # namespace shadowing warning, benign
@@ -90,7 +91,9 @@ dep.pdf: dep.graph
 # already removes user and host names (good!)
 .PHONY: package
 package:
-	git archive --prefix secrefstar/ -o artifact.tar.gz HEAD .
+	@# BeyondCriteria.fst lives in ../lib, so package the repository root
+	@# and keep the relative layout the Makefile expects.
+	git -C .. archive --prefix fstar-io/ -o secrefstar/artifact.tar.gz HEAD secrefstar lib
 
 validate:
 	@# Run depend first without the flag, as otherwise it will
