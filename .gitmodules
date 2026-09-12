@@ -1,0 +1,3 @@
+[submodule "pdm4all"]
+	path = pdm4all
+	url = https://github.com/TheoWinterhalter/pdm4all.git
