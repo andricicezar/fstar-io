@@ -87,15 +87,33 @@ let play_guess_spec (a3p:threep) : spec =
     (exportable_pair a3p bool Leaf int Leaf).c_styp (** TODO: simplify here with witnessable *)
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
+(* The check is given the type that `pre_check` (i.e. `select_check`)
+   abbreviates, spelled out: newer F* versions no longer elaborate the lambda
+   against the abbreviation when it appears as an argument of `EnforcePre`. *)
+let play_guess_check (args:(play_guess_spec c3p).argt)
+  : ST (eh0:FStar.Ghost.erased heap{pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt args eh0} &
+        cb_check c3p (play_guess_spec c3p).argt unit
+          (pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt)
+          (fun x _ _ h1 -> (play_guess_spec c3p).pre x h1) args eh0)
+       (pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt args)
+       (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1) =
+  let args : (player_type c3p & (int & (int & int))) = args in
+  let eh0 = get_heap () in
+  let check : cb_check c3p (play_guess_spec c3p).argt unit (pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt) (fun x _ _ h1 -> (play_guess_spec c3p).pre x h1) args eh0 =
+    (fun () -> if fst (snd (snd args)) < fst (snd args) && fst (snd args) < snd (snd (snd args)) then Inl () else Inr (Contract_failure "Invalid range")) in
+  (| eh0, check |)
+
 let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
   EnforcePre
-    (fun args ->
-      let args : (player_type c3p & (int & (int & int))) = args in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (player_type c3p & (int & (int & int))) _ (pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt) (fun x _ _ h1 -> (play_guess_spec c3p).pre x h1) args eh0 =
-        (fun () -> if fst (snd (snd args)) < fst (snd args) && fst (snd args) < snd (snd (snd args)) then Inl () else Inr (Contract_failure "Invalid range")) in
-      (| eh0, check |))
-    (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (play_guess_spec c3p).rett) #(witnessable_resexn _ #(play_guess_spec c3p).wt_rett) h0 r h1))
+    play_guess_check
+    (fun x r ->
+      (* `satisfy` on the return type is `True` (the return type is ground),
+         but reducing it needs the case analysis on the resexn. *)
+      (match r with
+       | Inl v -> assert ((play_guess_spec c3p).wt_rett.satisfy v (prref c3p))
+                    by (norm [delta; iota; zeta; primops; simplify]; smt ())
+       | Inr _ -> ());
+      assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (play_guess_spec c3p).rett) #(witnessable_resexn _ #(play_guess_spec c3p).wt_rett) h0 r h1))
 
 instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (U10 (play_guess_spec a3p)) _ _) =
   exportable_arrow_err10 a3p 
@@ -138,7 +156,7 @@ let compiled_prog2 =
 
 val some_ctx2 : ctx_tgt2 (comp_int_src_tgt2 sit2)
 let some_ctx2 #a3p _ _ alloc prog =
-  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #(witnessable_arrow int cmp _ _)) int = 
+  let cb : (safe_importable_is_importable a3p (player_type a3p) (Node (U10 (player_spec a3p)) Leaf Leaf) #(importable_player a3p)).ityp =
     (fun ((l, r), cb) -> let _ = cb l in let _ = cb (l+1) in r) in
   match prog (cb, (0, (0, 10))) with
   | Inl (b, guesses_count) -> if b then -2 else 0

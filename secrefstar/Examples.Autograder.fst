@@ -340,30 +340,44 @@ let student_solution_safe_importable a3p : safe_importable_to a3p (student_solut
     (fun ll h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0)
     (fun ll h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))
 
+(* The check is given the type that `select_check` abbreviates, spelled out,
+   with the spec's own pre and post at the spec's witnessable instance:
+   newer F* versions no longer elaborate the lambda against the abbreviation
+   when it appears as an argument of `EnforcePost`. *)
+let student_solution_check (ll:(student_solution_spec c3p).argt)
+  : ST (eh0:FStar.Ghost.erased heap{(student_solution_spec c3p).pre ll eh0} &
+        cb_check c3p (student_solution_spec c3p).argt (resexn (student_solution_spec c3p).rett)
+          #(witnessable_resexn _ #(student_solution_spec c3p).wt_rett)
+          (student_solution_spec c3p).pre (student_solution_spec c3p).post ll eh0)
+       ((student_solution_spec c3p).pre ll)
+       (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1) =
+  let ll : ref (linkedList int) = ll in
+  recall (contains_pred ll);
+  let l0 = ll_as_list_LR 10000 ll in
+  let eh0 = get_heap () in
+  let check : cb_check c3p (student_solution_spec c3p).argt (resexn (student_solution_spec c3p).rett)
+                #(witnessable_resexn _ #(student_solution_spec c3p).wt_rett)
+                (student_solution_spec c3p).pre (student_solution_spec c3p).post ll eh0 =
+    (fun res ->
+      let h1 = get_heap () in
+      recall (contains_pred ll);
+      match determine_fuel ll 10000 with
+      | None -> Inr (Contract_failure "Linked list contains cycles")
+      | Some fuel -> begin
+           assert (no_cycles ll h1);
+           if sorted_LR fuel ll then begin
+             let l1 = ll_as_list_LR 10000 ll in
+             if sort_list l0 = sort_list l1 then Inl ()
+             else Inr (Contract_failure "Linked list has different elements")
+           end else Inr (Contract_failure "Linked list is not sorted")
+      end) in
+  (| eh0, check |)
+
 let student_solution_hoc : hoc c3p (student_solution_spec c3p) =
   EnforcePost
     (fun _ -> ())
     (fun _ _ -> ())
-    (fun ll ->
-       let ll : ref (linkedList int) = ll in
-       recall (contains_pred ll);
-       let l0 = ll_as_list_LR 10000 ll in
-       let eh0 = get_heap () in
-       let check : cb_check c3p (ref (linkedList int)) (resexn unit) (fun x -> lr_pre (fun h0 -> satisfy x (prref_c) /\ no_cycles ll h0)) (fun x -> lr_post _ _ (fun h0 r h1 -> (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))) ll eh0 =
-         (fun res ->
-           let h1 = get_heap () in
-           recall (contains_pred ll);
-           match determine_fuel ll 10000 with
-           | None -> Inr (Contract_failure "Linked list contains cycles")
-           | Some fuel -> begin
-                assert (no_cycles ll h1);
-                if sorted_LR fuel ll then begin
-                  let l1 = ll_as_list_LR 10000 ll in
-                  if sort_list l0 = sort_list l1 then Inl ()
-                  else Inr (Contract_failure "Linked list has different elements")
-                end else Inr (Contract_failure "Linked list is not sorted")
-           end) in
-       (| eh0, check |))
+    student_solution_check
 
 let student_solution_pkhoc : pck_uhoc c3p =
   (| U00 (student_solution_spec c3p), U00hoc student_solution_hoc |)

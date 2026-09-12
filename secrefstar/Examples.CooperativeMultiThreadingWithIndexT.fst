@@ -122,15 +122,28 @@ let lemma_always_satisfy_arg_type a3p (x:arg_type a3p) :
   let (_, l) = x in
   lemma_always_satisfy_list_t_task a3p l
 
+(* The check is given the type that `pre_check` (i.e. `select_check`)
+   abbreviates, spelled out: newer F* versions no longer elaborate the lambda
+   against the abbreviation when it appears as an argument of `EnforcePre`. *)
+let hoc_check_select (x:(run_type_spec c3p).argt)
+  : ST (eh0:FStar.Ghost.erased heap{pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt x eh0} &
+        cb_check c3p (run_type_spec c3p).argt unit
+          (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt)
+          (fun x _ _ h1 -> (run_type_spec c3p).pre x h1) x eh0)
+       (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt x)
+       (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1) =
+  let eh0 = get_heap () in
+  let check : cb_check c3p (run_type_spec c3p).argt unit
+                (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt)
+                (fun x _ _ h1 -> (run_type_spec c3p).pre x h1) x eh0 =
+    (fun () ->
+      lemma_always_satisfy_arg_type c3p x;
+      Inl ()) in
+  (| eh0, check |)
+
 let hoc_check : hoc c3p (run_type_spec c3p) =
  EnforcePre
-   (fun x ->
-     let eh0 = get_heap () in
-     let check : cb_check c3p _ _ (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt) (fun x _ _ h1 -> (run_type_spec c3p).pre x h1) x eh0 =
-       (fun () ->
-         lemma_always_satisfy_arg_type c3p x;
-         Inl ()) in
-     (| eh0, check |)   )
+   hoc_check_select
    (fun x r -> ())
 
 let hoc_check_pck : pck_uhoc c3p =
@@ -180,6 +193,10 @@ let some_ctx #a3p read write alloc my_run =
 
   let myargs : ((int & int) & list (t_task a3p)) = ((5000,0), [res_a read write alloc; res_b read write alloc]) in
   let h0 = get_heap () in
+  (* `satisfy` holds for the argument (ints and arrows always satisfy it),
+     but that now has to be reduced explicitly. *)
+  assert (forall h. pre_poly_arrow a3p myargs h <==> inv a3p h)
+    by (norm [delta; iota; zeta; primops; simplify]; smt ());
 
   match my_run myargs with
   | Inl _ -> 0

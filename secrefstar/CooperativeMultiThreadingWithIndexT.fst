@@ -190,7 +190,7 @@ val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation c3p unit)) (cou
   : LR unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1))
-#push-options "--split_queries always"
+#push-options "--z3rlimit 80 --ifuel 2 --split_queries always"
 let rec scheduler
   (fuel:nat)
   (r : ref int)

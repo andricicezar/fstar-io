@@ -69,8 +69,8 @@ effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
 effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
 
 unfold
-let wp_lift_pure_st (w : pure_wp 'a) : st_wp 'a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+let wp_lift_pure_st (#a:Type u#a) (w : pure_wp a) : st_wp a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   fun p h -> w (fun r -> p r h)
 
 val lift_pure_mst :
@@ -79,7 +79,7 @@ val lift_pure_mst :
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (mheap a (wp_lift_pure_st w))
 let lift_pure_mst a w f =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   let lhs = partial_return (as_requires w) in
   let rhs = (fun (pre:(squash (as_requires w))) -> mheap_return a (f pre)) in
   let m = mheap_bind _ _ _ _ lhs rhs in

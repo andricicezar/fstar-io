@@ -236,7 +236,7 @@ let progr_declassify rp f =
   let r = downgrade_val (f (raise_val rp)) in
   r
 
-#push-options "--split_queries always"
+#push-options "--z3rlimit 40 --split_queries always"
 val progr_declassify_nested:
   rp: ref (ref int) ->
   ctx:(elab_typ c3p (TArr (TRef (TRef TNat)) TUnit)) ->
@@ -371,7 +371,7 @@ let rec downgrade_typ #a3p (t:typ0) (x:elab_typ a3p t) : elab_typ0 t =
     let (v1, v2) = x in
     (downgrade_typ t1 v1, downgrade_typ t2 v2)
   end
-  | _ -> downgrade_val x
+  | _ -> downgrade_val u#0 u#1 x
 
 let rec raise_typ #a3p (t:typ0) (x:elab_typ0 t) : elab_typ a3p t =
   match t with
@@ -386,7 +386,7 @@ let rec raise_typ #a3p (t:typ0) (x:elab_typ0 t) : elab_typ a3p t =
     let (v1, v2) = x in
     (raise_typ #a3p t1 v1, raise_typ #a3p t2 v2)
   end
-  | _ -> raise_val x
+  | _ -> raise_val u#0 u#1 x
 
 let rec lemma_downgrade_typ #a3p (t:typ0) (x:elab_typ a3p t) :
   Pure unit
@@ -460,15 +460,15 @@ let rec backtranslate
   let rcall #g #e (#t:typ) = backtranslate #a3p bt_read bt_write bt_alloc #g #e #t in
 
   match tyj with
-  | TyUnit -> raise_val ()
-  | TyZero -> raise_val 0
+  | TyUnit -> raise_val u#0 u#1 ()
+  | TyZero -> raise_val u#0 u#1 0
   | TySucc tyj_s ->
-    raise_val (1 + (downgrade_val (rcall tyj_s ve)))
+    raise_val u#0 u#1 (1 + (downgrade_val u#0 u#1 (rcall tyj_s ve)))
 
   | TyAllocRef #_ #_ #t tyj_e -> begin
     let v : elab_typ0 t = downgrade #a3p (rcall tyj_e ve) in
     let r : ref (elab_typ0 t) = bt_alloc #t v in
-    raise_val r
+    raise_val u#0 u#1 r
   end
   | TyReadRef #_ #_ #t tyj_e -> begin
     let r' : ref (elab_typ0 t) = downgrade (rcall tyj_e ve) in
@@ -478,7 +478,7 @@ let rec backtranslate
     let r : ref (elab_typ0 t) = downgrade (rcall tyj_ref ve) in
     let v : elab_typ0 t = downgrade (rcall tyj_v ve) in
     bt_write #t r v;
-    raise_val ()
+    raise_val u#0 u#1 ()
   end
 
   | TyAbs _ _ ->

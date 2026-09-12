@@ -33,18 +33,29 @@ let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (U00
     (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x))
 
+(* The check is given the type that `select_check` abbreviates, spelled out:
+   newer F* versions no longer elaborate the lambda against the abbreviation
+   when it appears as an argument of `EnforcePost`. The inner `cb_check` is
+   likewise given the spec's own pre and post at the spec's witnessable
+   instance; spelling it with `lr_pre`/`lr_post` gives a weaker post (it
+   drops `hrel`). *)
+let f_check (rx:f_spec.argt)
+  : ST (eh0:erased heap{f_spec.pre rx eh0} &
+        cb_check c3p f_spec.argt (resexn f_spec.rett) #(witnessable_resexn _ #f_spec.wt_rett) f_spec.pre f_spec.post rx eh0)
+       (f_spec.pre rx) (fun h0 r h1 -> reveal (dfst r) == h0 /\ h0 == h1) =
+  let rx : ref int = rx in
+  recall (contains_pred rx);
+  let x = lr_read rx in
+  let eh0 = get_heap () in
+  let check : cb_check c3p f_spec.argt (resexn f_spec.rett) #(witnessable_resexn _ #f_spec.wt_rett) f_spec.pre f_spec.post rx eh0 =
+    (fun kres -> if x = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+  (| eh0, check |)
+
 let f_hoc : hoc c3p f_spec =
   EnforcePost
     (fun _ -> ())
     (fun _ _ -> ())
-    (fun rx ->
-      let rx :ref int = rx in
-      recall (contains_pred rx);
-      let x = lr_read rx in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) (resexn unit) (fun x -> lr_pre (fun h0 -> satisfy x (prref_c))) (fun x -> lr_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)) rx eh0 =
-        (fun kres -> if x = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
-      (| eh0, check |))
+    f_check
 
 let f_pkhoc : pck_uhoc c3p =
   (| U00 f_spec, U00hoc f_hoc |)
@@ -123,16 +134,28 @@ let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (U00 (f_xe
     int Leaf #(exportable_int a3p)
     _ _
 
+(* Same as f_check above: the check is given the type that `pre_check`
+   (i.e. `select_check`) abbreviates, spelled out. *)
+let f_xeq5_check (rx:(f_xeq5_spec c3p).argt)
+  : ST (eh0:erased heap{pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt rx eh0} &
+        cb_check c3p (f_xeq5_spec c3p).argt unit
+          (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt)
+          (fun x _ _ h1 -> (f_xeq5_spec c3p).pre x h1) rx eh0)
+       (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt rx)
+       (fun h0 r h1 -> reveal (dfst r) == h0 /\ h0 == h1) =
+  let rx : ref int = rx in
+  let eh0 = get_heap () in
+  let check : cb_check c3p (f_xeq5_spec c3p).argt unit
+                (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt)
+                (fun x _ _ h1 -> (f_xeq5_spec c3p).pre x h1) rx eh0 =
+    (fun _ ->
+      recall (contains_pred rx);
+      if 5 = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+  (| eh0, check |)
+
 let f_xeq5_hoc : hoc c3p (f_xeq5_spec c3p) =
   EnforcePre
-    (fun rx ->
-      let rx :ref int = rx in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt) (fun x _ _ h1 -> (f_xeq5_spec c3p).pre x h1) rx eh0 =
-        (fun _ ->
-          recall (contains_pred rx);
-          if 5 = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
-      (| eh0, check |))
+    f_xeq5_check
     (fun x r -> ())
 
 let f_xeq5_pkhoc : pck_uhoc c3p =
