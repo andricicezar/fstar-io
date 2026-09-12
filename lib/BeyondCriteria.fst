@@ -12,17 +12,15 @@ open FStar.Classical.Sugar
 open FStar.Tactics
 open FStar.List.Tot
 open FStar.Tactics.Typeclasses
-open FStar.FunctionalExtensionality
 
 (** ** Trace Model *)
-
-(* F* does not have co-induction *)
-let stream a = nat ^-> a
 
 noeq
 type trace (#event_typ:Type) =
 | Finite_trace : tr:(list event_typ) -> result:int -> trace #event_typ
-| Infinite_trace : stream (option event_typ) -> trace #event_typ
+(* F* does not have co-induction, so an infinite trace is a function from
+   positions to events. *)
+| Infinite_trace : (nat -> option event_typ) -> trace #event_typ
 
 type trace_property (#event_typ:Type) = trace #event_typ -> Type0
 
@@ -63,7 +61,7 @@ type language (sem:Type u#e) = {
   whole : Type u#d;
   link  : #i:interface -> pprog i -> ctx i -> whole;
 
-  beh   : whole ^-> sem;
+  beh   : whole -> sem;
 }
 
 noeq

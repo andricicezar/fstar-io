@@ -36,8 +36,8 @@ let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
 val beh_whole1 : whole_src1 -> st_mwp_h heap int
 let beh_whole1 w = theta (reify (w ()))
 
-val beh_src1 : whole_src1 ^-> st_mwp_h heap int
-let beh_src1 = on_domain whole_src1 (fun ws -> beh_whole1 ws) (** what happens with the pre-condition? **)
+val beh_src1 : whole_src1 -> st_mwp_h heap int
+let beh_src1 = (fun ws -> beh_whole1 ws) (** what happens with the pre-condition? **)
 
 let src_language1 : language (st_wp int) = {
   interface = src_interface1;
@@ -70,8 +70,8 @@ let instantiate_ctx_tgt1 c =
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
 let link_tgt1 #i p c () = p (instantiate_ctx_tgt1 c)
 
-val beh_tgt1 : whole_tgt1 ^-> st_mwp_h heap int
-let beh_tgt1 = on_domain whole_tgt1 (fun wt -> beh_whole1 wt)
+val beh_tgt1 : whole_tgt1 -> st_mwp_h heap int
+let beh_tgt1 = (fun wt -> beh_whole1 wt)
 
 let tgt_language1 : language (st_wp int) = {
   interface = tgt_interface1;

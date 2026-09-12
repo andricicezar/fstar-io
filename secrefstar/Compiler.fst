@@ -48,8 +48,8 @@ let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
 val beh_whole1 : (unit -> LR int (fun _ -> True) (fun _ _ _ -> True)) -> sem_state
 let beh_whole1 w = beh_sem (reify (w ()))
 
-val beh_src1 : whole_src1 ^-> sem_state
-let beh_src1 = on_domain whole_src1 (fun ws -> beh_whole1 (dsnd ws)) (** what happens with the pre-condition? **)
+val beh_src1 : whole_src1 -> sem_state
+let beh_src1 = (fun ws -> beh_whole1 (dsnd ws)) (** what happens with the pre-condition? **)
 
 let src_language1 : language sem_state = {
   interface = src_interface1;
@@ -86,8 +86,8 @@ val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
 let link_tgt1 p c =
   fun () -> p (instantiate_ctx_tgt1 c)
 
-val beh_tgt1 : whole_tgt1 ^-> sem_state
-let beh_tgt1 = on_domain whole_tgt1 (fun wt -> beh_whole1 wt)
+val beh_tgt1 : whole_tgt1 -> sem_state
+let beh_tgt1 = (fun wt -> beh_whole1 wt)
 
 let tgt_language1 : language sem_state = {
   interface = tgt_interface1;
@@ -203,8 +203,8 @@ let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
 val beh_whole2 : whole_src2 -> sem_state
 let beh_whole2 w = beh_sem (reify (w ()))
 
-val beh_src2 : whole_src2 ^-> sem_state
-let beh_src2 = on_domain whole_src2 (fun ws -> beh_whole2 ws) (** what happens with the pre-condition? **)
+val beh_src2 : whole_src2 -> sem_state
+let beh_src2 = (fun ws -> beh_whole2 ws) (** what happens with the pre-condition? **)
 
 let src_language2 : language sem_state = {
   interface = src_interface2;
@@ -237,8 +237,8 @@ let link_tgt2 p c =
   fun () ->
     c tl_read tl_write tl_alloc p
 
-val beh_tgt2 : whole_tgt2 ^-> sem_state
-let beh_tgt2 = on_domain whole_tgt2 (fun wt -> beh_whole2 wt)
+val beh_tgt2 : whole_tgt2 -> sem_state
+let beh_tgt2 = (fun wt -> beh_whole2 wt)
 
 let tgt_language2 : language sem_state = {
   interface = tgt_interface2;

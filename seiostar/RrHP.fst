@@ -328,14 +328,14 @@ let src_language : language behS_t = {
   interface = intS;
   pprog = progS; ctx = ctxS; whole = wholeS;
   link = linkS;
-  beh = FStar.FunctionalExtensionality.on_domain wholeS behS;
+  beh = behS;
 }
 
 let tgt_language : language behT_t = {
   interface = intT;
   pprog = progT; ctx = ctxT; whole = wholeT;
   link = linkT;
-  beh = FStar.FunctionalExtensionality.on_domain wholeT behT;
+  beh = behT;
 }
 
 let comp : compiler = {

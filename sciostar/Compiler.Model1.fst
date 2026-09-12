@@ -52,8 +52,8 @@ type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> M
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
   (| i.mst, i.psi,  p #AllOps (c #AllOps (inst_io_lib i.pi) (make_dcs_eff i.ct_dcs)) |)
 
-val beh_src : whole_src ^-> trace_property #event
-let beh_src = on_domain whole_src (fun (| mst, _, ws |) -> beh mst ws)
+val beh_src : whole_src -> trace_property #event
+let beh_src = fun (| mst, _, ws |) -> beh mst ws
 
 let src_language : language (trace_property #event) = {
   interface = src_interface;
@@ -71,8 +71,8 @@ type whole_tgt = mst:mstate & (unit -> MIO int AllOps mst (fun _ -> True) (fun _
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   (| i.mst , p (c #AllOps (inst_io_lib i.pi)) |)
 
-val beh_tgt : whole_tgt ^-> trace_property #event
-let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
+val beh_tgt : whole_tgt -> trace_property #event
+let beh_tgt = fun (| mst, wt |) -> beh mst wt
 
 let tgt_language : language (trace_property #event) = {
   interface = tgt_interface;
