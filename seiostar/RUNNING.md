@@ -28,11 +28,13 @@ The Peregrine step (`io_program_raw.mlf`) runs automatically under
 
 4. Test io_program_exe:
 
-        $ echo "foo" > .build/temp
+        $ echo "foo" > temp
         $ .build/io_program_exe
         true
-        $ cat .build/temp
+        $ cat temp
         overwrite
+
+   (the program opens `temp` relative to the working directory)
 
 5. Test other agents:
 
