@@ -40,6 +40,18 @@ $(ABS_CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+# BeyondCriteria.fst lives in ../lib, so it needs rules of its own: the
+# pattern rules above only match sources in this directory (or lambdabox/),
+# and without these its .checked file is never written -- which silently
+# stops every .checked file downstream of it from being written too.
+$(CACHEDIR)/%.fst.checked: ../lib/%.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+$(ABS_CACHEDIR)/%.fst.checked: ../lib/%.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 $(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp

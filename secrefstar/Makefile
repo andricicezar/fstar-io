@@ -25,6 +25,14 @@ all: verify
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+# BeyondCriteria.fst lives in ../lib, so it needs a rule of its own: the
+# pattern rules above only match sources in this directory, and without this
+# its .checked file is never written -- which silently stops every .checked
+# file downstream of it from being written too.
+.cache/%.fst.checked: ../lib/%.fst
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 PLUG=extraction/lib/secref_extr/secref_extr
 
 $(PLUG).cmxs:
